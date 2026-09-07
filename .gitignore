@@ -22,5 +22,7 @@ superjoin-vit-2026-assignment.pdf
 plan 1/
 plan 2/
 spike/
-spike.py
 Superjoin Shortlisted Candidates*
+
+# Root-level working files (moved to docs/validation/ for tracking)
+/spike.py

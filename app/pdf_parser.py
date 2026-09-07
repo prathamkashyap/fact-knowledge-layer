@@ -71,6 +71,12 @@ DEFAULT_KEYWORDS = [
     "ebitda", "expenditure", "pat", "margin"
 ]
 
+# Initial generic heuristic threshold. Higher values are more selective (fewer
+# candidate pages, higher precision); lower values are more permissive (more
+# candidate pages, higher recall). The trade-off between recall and LLM cost
+# should be tuned per deployment; 8.0 is a conservative starting point that
+# keeps roughly the top half of pages in curated excerpts while still
+# filtering low-information pages in full documents.
 CANDIDATE_SCORE_THRESHOLD = 8.0
 
 

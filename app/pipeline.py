@@ -259,7 +259,7 @@ def process_document_pipeline(
     normalization → candidate matching → relationship reasoning → persistence.
     """
     doc_result = parse_pdf_document(pdf_path)
-    new_facts = extract_facts_from_document(provider, pdf_path, candidate_only=True)
+    new_facts = extract_facts_from_pages(provider, doc_result.pages, candidate_only=True)
     normalized_new_facts = normalize_facts(new_facts, context=doc_result.filename)
 
     comparisons: List[FactComparison] = []

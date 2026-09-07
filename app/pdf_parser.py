@@ -200,15 +200,23 @@ def parse_pdf_page(
                 block_type=b[6],
             ))
 
-    # Detect tables if available in PyMuPDF
+    # Detect tables: fast tabular layout heuristic from text rows with 3+ numbers,
+    # supplemented by PyMuPDF find_tables when drawing complexity is bounded
+    # to avoid O(chars x drawings) backtracking stalls on complex annual reports.
     has_tables = False
-    try:
-        tables = page.find_tables()
-        if tables and len(tables.tables) > 0:
-            has_tables = True
-    except Exception:
-        # Fallback if find_tables isn't available or fails
-        has_tables = False
+    lines = raw_text.splitlines()
+    tabular_lines = sum(1 for line in lines if len(re.findall(r'\b\d+(?:\.\d+)?\b', line)) >= 3)
+    if tabular_lines >= 2:
+        has_tables = True
+    else:
+        try:
+            drawings = page.get_drawings()
+            if 0 < len(drawings) <= 30:
+                tables = page.find_tables()
+                if tables and len(tables.tables) > 0:
+                    has_tables = True
+        except Exception:
+            has_tables = False
 
     # Compute inspectable page score
     score_breakdown = compute_page_score(
@@ -232,10 +240,20 @@ def parse_pdf_page(
     )
 
 
+# In-memory document ingestion cache to avoid redundant parsing across test cases & pipeline stages
+_PARSED_DOC_CACHE: Dict[tuple, DocumentIngestionResult] = {}
+
+
+def clear_document_cache() -> None:
+    """Clear the in-memory document parsing cache."""
+    _PARSED_DOC_CACHE.clear()
+
+
 def parse_pdf_document(
     filepath: str,
     keywords: Optional[List[str]] = None,
     threshold: float = CANDIDATE_SCORE_THRESHOLD,
+    use_cache: bool = True,
 ) -> DocumentIngestionResult:
     import time
     start_time = time.time()
@@ -243,9 +261,16 @@ def parse_pdf_document(
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"PDF file not found at: {filepath}")
 
+    abs_path = os.path.abspath(filepath)
+    mtime = os.path.getmtime(abs_path)
+    cache_key = (abs_path, mtime, tuple(keywords) if keywords else None, threshold)
+
+    if use_cache and cache_key in _PARSED_DOC_CACHE:
+        return _PARSED_DOC_CACHE[cache_key]
+
     filename = os.path.basename(filepath)
     # Stable document ID based on filepath hash
-    doc_id = hashlib.md5(os.path.abspath(filepath).encode('utf-8')).hexdigest()[:12]
+    doc_id = hashlib.md5(abs_path.encode('utf-8')).hexdigest()[:12]
 
     doc = fitz.open(filepath)
     total_pages = len(doc)
@@ -269,13 +294,18 @@ def parse_pdf_document(
     elapsed_ms = round((time.time() - start_time) * 1000, 2)
     candidate_rate = round(candidate_count / total_pages, 4) if total_pages > 0 else 0.0
 
-    return DocumentIngestionResult(
+    result = DocumentIngestionResult(
         document_id=doc_id,
         filename=filename,
-        filepath=os.path.abspath(filepath),
+        filepath=abs_path,
         total_pages=total_pages,
         candidate_pages_count=candidate_count,
         candidate_rate=candidate_rate,
         processing_time_ms=elapsed_ms,
         pages=pages,
     )
+
+    if use_cache:
+        _PARSED_DOC_CACHE[cache_key] = result
+
+    return result

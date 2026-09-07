@@ -43,9 +43,15 @@ class MockProvider(LLMProvider):
     Returns fixture-based facts without calling any external API.
     """
 
-    def __init__(self, facts: Optional[List[Fact]] = None, comparisons: Optional[List[FactComparison]] = None):
+    def __init__(
+        self,
+        facts: Optional[List[Fact]] = None,
+        comparisons: Optional[List[FactComparison]] = None,
+        comparisons_map: Optional[dict] = None,
+    ):
         self._facts = facts or []
         self._comparisons = comparisons or []
+        self._comparisons_map = comparisons_map or {}
         self._extract_calls: list = []
         self._compare_calls: list = []
 
@@ -55,6 +61,12 @@ class MockProvider(LLMProvider):
 
     def compare_facts(self, fact_a: Fact, fact_b: Fact) -> FactComparison:
         self._compare_calls.append({"fact_a": fact_a, "fact_b": fact_b})
+        key = (fact_a.id, fact_b.id)
+        rev_key = (fact_b.id, fact_a.id)
+        if key in self._comparisons_map:
+            return self._comparisons_map[key]
+        if rev_key in self._comparisons_map:
+            return self._comparisons_map[rev_key]
         if self._comparisons:
             return self._comparisons[0]
         return FactComparison(

@@ -14,3 +14,12 @@ build/
 *.swp
 *.swo
 *.log
+
+# Planning / assignment reference files (not part of the application)
+claude-web-master-prompt.md
+superjoin-final-plan.md
+superjoin-vit-2026-assignment.pdf
+plan 1/
+plan 2/
+spike/
+spike.py

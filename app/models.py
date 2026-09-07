@@ -41,6 +41,10 @@ class Fact(BaseModel):
     # Canonicalized forms (populated during normalization, not extraction)
     canonical_subject: Optional[str] = None
     canonical_predicate: Optional[str] = None
+    normalized_value: Optional[Union[float, str]] = None
+    normalized_unit: Optional[str] = None
+    normalized_period: Optional[str] = None
+    period_type: Optional[str] = None            # "fiscal_year" | "quarter" | "date" | "as_of" | "unknown"
 
 
 class Dimensions(BaseModel):
@@ -52,6 +56,55 @@ class Dimensions(BaseModel):
     period: str
     scope: str
     qualifiers: str   # "same" / "different" / "unknown"
+
+
+class NumericalComparison(BaseModel):
+    """Metadata describing numerical comparability between two facts."""
+    is_numeric: bool
+    status: str            # "exact" | "close_rounding" | "different" | "incompatible_units" | "categorical"
+    is_exact: bool = False
+    is_close_rounding: bool = False
+    value_a_norm: Optional[float] = None
+    value_b_norm: Optional[float] = None
+    unit_norm: Optional[str] = None
+    absolute_diff: Optional[float] = None
+    relative_diff: Optional[float] = None
+    rounding_note: Optional[str] = None
+
+
+class PeriodComparison(BaseModel):
+    """Metadata describing period compatibility between two facts."""
+    period_a_norm: Optional[str] = None
+    period_b_norm: Optional[str] = None
+    type_a: Optional[str] = None
+    type_b: Optional[str] = None
+    is_same_period: bool = False
+    is_same_type: bool = False
+    compatibility_note: Optional[str] = None
+
+
+class PreparedComparison(BaseModel):
+    """
+    Prepared candidate pair ready for downstream relationship reasoning.
+    Retains original facts, normalized facts, dimension diff, and comparison metadata.
+    NOTE: Does NOT assign the final relationship (that is the reasoner's responsibility).
+    """
+    pair_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
+    fact_a: Fact
+    fact_b: Fact
+    dimensions: Dimensions
+    numerical_comparison: Optional[NumericalComparison] = None
+    period_comparison: Optional[PeriodComparison] = None
+
+
+class CandidateStatistics(BaseModel):
+    """Inspectable candidate generation metrics."""
+    total_facts: int
+    total_naive_pairs: int
+    candidate_groups_count: int
+    candidate_pairs_count: int
+    reduction_ratio: float
+    processing_time_ms: float = 0.0
 
 
 class FactComparison(BaseModel):

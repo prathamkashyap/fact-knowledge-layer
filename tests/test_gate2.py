@@ -446,3 +446,85 @@ def test_cmp_list_one_empty():
 
 def test_cmp_list_both_empty():
     assert _cmp_list([], []) == "same"
+
+
+# ---------------------------------------------------------------------------
+# MockProvider isolation: mutation does not leak across calls
+# ---------------------------------------------------------------------------
+
+def test_mock_provider_returns_deep_copies():
+    """Mutating a fact from one extraction call must not affect later calls."""
+    original = Fact(
+        subject="X", predicate="Y", value=1.0,
+        evidence=Evidence(document_id="orig", page_number=1, text="X is 1.0"),
+        confidence=0.9,
+    )
+    provider = MockProvider(facts=[original])
+    page = PageObject(
+        document_id="test", filename="test.pdf", page_number=1,
+        raw_text="X is 1.0", text_length=7, blocks_count=1,
+        has_tables=False, score_breakdown=ScoreBreakdown(total_score=10.0, is_candidate=True),
+    )
+
+    # First call — mutate the result
+    facts_1 = provider.extract_facts("X is 1.0", "test")
+    facts_1[0].evidence.document_id = "MUTATED"
+    facts_1[0].subject = "CHANGED"
+
+    # Second call — must return the original, unmodified fixture
+    facts_2 = provider.extract_facts("X is 1.0", "test")
+    assert facts_2[0].evidence.document_id == "orig"
+    assert facts_2[0].subject == "X"
+
+
+# ---------------------------------------------------------------------------
+# Pipeline evidence attachment (not from pre-populated fixtures)
+# ---------------------------------------------------------------------------
+
+def test_pipeline_attaches_evidence_from_page():
+    """Provider returns a fact with empty evidence; pipeline fills in document_id and page_number."""
+    bare_fact = Fact(
+        subject="Test", predicate="val", value=42.0,
+        evidence=Evidence(document_id="", page_number=0, text="Test is 42.0"),
+        confidence=0.9,
+    )
+    provider = MockProvider(facts=[bare_fact])
+    page = PageObject(
+        document_id="abc123", filename="report.pdf", page_number=17,
+        raw_text="Test is 42.0", text_length=12, blocks_count=1,
+        has_tables=False, score_breakdown=ScoreBreakdown(total_score=10.0, is_candidate=True),
+    )
+    facts = extract_facts_from_page(provider, page)
+    assert len(facts) == 1
+    f = facts[0]
+    # Pipeline must have overwritten the empty evidence fields
+    assert f.evidence.document_id == "abc123"
+    assert f.evidence.page_number == 17
+    assert f.evidence.document_name == "report.pdf"
+    # Original fact in the provider must be untouched
+    assert provider._facts[0].evidence.document_id == ""
+
+
+# ---------------------------------------------------------------------------
+# Evidence text validation: empty evidence is rejected
+# ---------------------------------------------------------------------------
+
+def test_parse_skips_facts_with_empty_evidence():
+    """Facts with empty or whitespace-only evidence_text should be dropped."""
+    from app.extraction import _parse_extracted_facts
+    raw = [
+        {"subject": "A", "predicate": "b", "value": 1.0,
+         "evidence_text": "  ", "confidence": 0.9},
+        {"subject": "C", "predicate": "d", "value": 2.0,
+         "evidence_text": "C is 2.0", "confidence": 0.9},
+    ]
+    facts = _parse_extracted_facts(raw, "doc p.1")
+    assert len(facts) == 1
+    assert facts[0].subject == "C"
+
+def test_parse_rejects_completely_empty_evidence():
+    from app.extraction import _parse_extracted_facts
+    raw = [{"subject": "X", "predicate": "y", "value": 1.0,
+            "evidence_text": "", "confidence": 0.9}]
+    facts = _parse_extracted_facts(raw, "doc p.1")
+    assert len(facts) == 0

@@ -3,6 +3,7 @@ LLM provider abstraction for fact extraction and comparison.
 Production code should not be hard-coded around a single provider.
 """
 
+import copy
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from app.models import Fact, FactComparison, Dimensions
@@ -50,7 +51,7 @@ class MockProvider(LLMProvider):
 
     def extract_facts(self, text: str, page_context: str) -> List[Fact]:
         self._extract_calls.append({"text": text, "page_context": page_context})
-        return self._facts
+        return copy.deepcopy(self._facts)
 
     def compare_facts(self, fact_a: Fact, fact_b: Fact) -> FactComparison:
         self._compare_calls.append({"fact_a": fact_a, "fact_b": fact_b})

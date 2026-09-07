@@ -421,3 +421,257 @@ def test_reason_all_comparisons_batch():
         assert isinstance(r, FactComparison)
         assert r.relationship in ("CORROBORATES", "CONTRADICTS", "RECONCILABLE", "UNRELATED", "UNCERTAIN")
         assert len(r.reason) > 0
+
+
+# ---------------------------------------------------------------------------
+# 6. Provider Exception Fallback
+# ---------------------------------------------------------------------------
+
+def test_provider_exception_falls_back_to_uncertain():
+    """When the LLM provider throws, reason_comparison must catch and return UNCERTAIN."""
+    class BrokenProvider:
+        def compare_facts(self, fact_a, fact_b):
+            raise RuntimeError("API connection timed out")
+
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    comp = reason_comparison(pairs[0], provider=BrokenProvider())  # type: ignore
+    assert comp.relationship == "UNCERTAIN"
+    assert comp.confidence == 0.0
+    assert "failed" in comp.reason.lower() or "timed out" in comp.reason.lower()
+
+
+# ---------------------------------------------------------------------------
+# 7. parse_reasoning_response Edge Cases
+# ---------------------------------------------------------------------------
+
+def test_parse_response_string_confidence():
+    """Confidence as a string number should be converted successfully."""
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    pair = pairs[0]
+    raw = {"relationship": "CORROBORATES", "confidence": "0.85", "reason": "Match."}
+    res = parse_reasoning_response(raw, pair)
+    assert res.confidence == 0.85
+
+
+def test_parse_response_non_numeric_confidence():
+    """Confidence as non-numeric string should fallback to 0.0."""
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    pair = pairs[0]
+    raw = {"relationship": "CORROBORATES", "confidence": "high", "reason": "Match."}
+    res = parse_reasoning_response(raw, pair)
+    assert res.confidence == 0.0
+
+
+def test_parse_response_empty_reason_gets_default():
+    """Empty reason string should be replaced with a generated fallback."""
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    pair = pairs[0]
+    raw = {"relationship": "RECONCILABLE", "confidence": 0.8, "reason": ""}
+    res = parse_reasoning_response(raw, pair)
+    assert len(res.reason) > 0
+    assert "RECONCILABLE" in res.reason
+
+
+def test_parse_response_none_reason_gets_default():
+    """Reason as None should be replaced with a generated fallback."""
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    pair = pairs[0]
+    raw = {"relationship": "UNCERTAIN", "confidence": 0.5, "reason": None}
+    res = parse_reasoning_response(raw, pair)
+    assert len(res.reason) > 0
+
+
+def test_parse_response_case_insensitive_relationship():
+    """Relationship enum should be matched case-insensitively."""
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    pair = pairs[0]
+    raw = {"relationship": "corroborates", "confidence": 0.9, "reason": "Match."}
+    res = parse_reasoning_response(raw, pair)
+    assert res.relationship == "CORROBORATES"
+
+
+# ---------------------------------------------------------------------------
+# 8. reason_all_comparisons Edge Cases
+# ---------------------------------------------------------------------------
+
+def test_reason_all_comparisons_empty_list():
+    """Empty list of prepared comparisons must return empty list."""
+    results = reason_all_comparisons([])
+    assert results == []
+
+
+def test_reason_all_comparisons_with_provider():
+    """Batch reasoning with provider must delegate to provider."""
+    pairs = generate_candidate_pairs([FACT_RBI_ACTUAL_GDP, FACT_IMF_ACTUAL_GDP])
+    provider = MockProvider(comparisons=[
+        FactComparison(
+            fact_a_id=pairs[0].fact_a.id, fact_b_id=pairs[0].fact_b.id,
+            relationship="UNCERTAIN", confidence=0.3, reason="mock",
+            dimensions=pairs[0].dimensions,
+        )
+    ])
+    results = reason_all_comparisons(pairs, provider=provider)
+    assert len(results) == 1
+    assert results[0].relationship == "UNCERTAIN"
+    assert provider.compare_call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# 9. Anti-Shortcut: Reasoner-Level Regression
+# ---------------------------------------------------------------------------
+
+def test_reasoner_same_value_different_period_not_corroboration():
+    """Same numeric value, same subject/predicate, but different period must NOT be CORROBORATES."""
+    f1 = Fact(subject="Delhivery", predicate="network reach", value=16677.0, unit="pin codes",
+              period="FY21", evidence=Evidence(document_id="d1", page_number=1, text="PIN codes FY21"))
+    f2 = Fact(subject="Delhivery", predicate="network reach", value=16677.0, unit="pin codes",
+              period="FY22", evidence=Evidence(document_id="d2", page_number=1, text="PIN codes FY22"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="same", unit="same",
+                              period="different", scope="same", qualifiers="same"),
+    )
+    comp = reason_comparison(pair)
+    assert comp.relationship != "CORROBORATES"
+
+
+def test_reasoner_material_difference_with_different_scope_not_contradiction():
+    """Materially different values with different scope must NOT be CONTRADICTS."""
+    f1 = Fact(subject="Delhivery", predicate="revenue", value=74540.0, unit="INR million",
+              period="FY24", scope="standalone",
+              evidence=Evidence(document_id="d1", page_number=1, text="Standalone 74540"))
+    f2 = Fact(subject="Delhivery", predicate="revenue", value=81415.0, unit="INR million",
+              period="FY24", scope="consolidated",
+              evidence=Evidence(document_id="d2", page_number=1, text="Consolidated 81415"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="different", unit="same",
+                              period="same", scope="different", qualifiers="same"),
+    )
+    comp = reason_comparison(pair)
+    assert comp.relationship != "CONTRADICTS"
+
+
+def test_reasoner_forecast_vs_actual_same_period():
+    """A forecast and an actual for the same period must NOT be CONTRADICTS."""
+    f_forecast = Fact(
+        subject="India GDP", predicate="growth rate", value=6.8, unit="percent",
+        period="2025-26", qualifiers=["forecast"],
+        evidence=Evidence(document_id="rbi", page_number=1, text="Projected 6.8%"),
+    )
+    f_actual = Fact(
+        subject="India GDP", predicate="growth rate", value=6.5, unit="percent",
+        period="2025-26",
+        evidence=Evidence(document_id="mospi", page_number=1, text="Actual 6.5%"),
+    )
+    pair = PreparedComparison(
+        fact_a=f_forecast, fact_b=f_actual,
+        dimensions=Dimensions(subject="same", predicate="same", value="different", unit="same",
+                              period="same", scope="same", qualifiers="different"),
+    )
+    comp = reason_comparison(pair)
+    # Forecast vs actual should NOT be a contradiction
+    assert comp.relationship != "CONTRADICTS"
+
+
+def test_reasoner_categorical_same_value_same_date_corroborates():
+    """Two categorical facts with same value and same as_of date should CORROBORATE."""
+    f1 = Fact(subject="Suvir Suren Sujan", predicate="board status",
+              value="resigned from the Board", as_of="August 24, 2023",
+              evidence=Evidence(document_id="d1", page_number=1, text="Sujan resigned Aug 24 2023"))
+    f2 = Fact(subject="Suvir Suren Sujan", predicate="board status",
+              value="resigned from the Board", as_of="August 24, 2023",
+              evidence=Evidence(document_id="d2", page_number=1, text="Sujan resigned Aug 24 2023"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="same", unit="same",
+                              period="same", scope="same", qualifiers="same"),
+    )
+    comp = reason_comparison(pair)
+    assert comp.relationship == "CORROBORATES"
+
+
+# ---------------------------------------------------------------------------
+# 10. Heuristic Classifier Branch Coverage
+# ---------------------------------------------------------------------------
+
+def test_heuristic_scope_unknown_not_contradiction():
+    """When one fact has scope=None and the other has scope='standalone', scope is 'unknown'.
+    The heuristic requires scope == 'same' for exact corroboration, so unknown scope
+    falls to UNCERTAIN — but must NOT be CONTRADICTS."""
+    f1 = Fact(subject="Delhivery", predicate="revenue", value=81415.0, unit="INR million",
+              period="FY24", scope=None,
+              evidence=Evidence(document_id="d1", page_number=1, text="Revenue 81415M"))
+    f2 = Fact(subject="Delhivery", predicate="revenue", value=81415.0, unit="INR million",
+              period="FY24", scope="standalone",
+              evidence=Evidence(document_id="d2", page_number=1, text="Standalone 81415M"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="same", unit="same",
+                              period="same", scope="unknown", qualifiers="same"),
+    )
+    comp = reason_comparison(pair)
+    assert comp.relationship != "CONTRADICTS"
+
+
+def test_heuristic_both_scopes_none_same_value_corroborates():
+    """When both facts have scope=None and same value/period -> CORROBORATES."""
+    f1 = Fact(subject="India", predicate="inflation", value=5.0, unit="percent",
+              period="2024-25", scope=None,
+              evidence=Evidence(document_id="d1", page_number=1, text="CPI 5.0%"))
+    f2 = Fact(subject="India", predicate="inflation", value=5.0, unit="percent",
+              period="2024-25", scope=None,
+              evidence=Evidence(document_id="d2", page_number=1, text="CPI 5.0%"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="same", unit="same",
+                              period="same", scope="same", qualifiers="same"),
+    )
+    comp = reason_comparison(pair)
+    assert comp.relationship == "CORROBORATES"
+
+
+def test_heuristic_estimate_vintage_non_advance_qualifier():
+    """Estimate vintage difference using 'provisional' vs 'final' (not containing 'advance').
+    The heuristic only detects 'advance' keywords for vintage reconciliation, so non-advance
+    qualifier differences fall through to the generic contradiction check. This documents
+    that limitation rather than asserting incorrect behavior."""
+    f1 = Fact(subject="India", predicate="GDP", value=300.0, unit="billion",
+              period="2024-25", qualifiers=["provisional"],
+              evidence=Evidence(document_id="d1", page_number=1, text="Provisional GDP 300B"))
+    f2 = Fact(subject="India", predicate="GDP", value=310.0, unit="billion",
+              period="2024-25", qualifiers=["final audited"],
+              evidence=Evidence(document_id="d2", page_number=1, text="Final GDP 310B"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="different", unit="same",
+                              period="same", scope="same", qualifiers="different"),
+    )
+    comp = reason_comparison(pair)
+    # Heuristic doesn't detect non-"advance" vintage keywords, so this becomes CONTRADICTS
+    # A live LLM would likely classify this as RECONCILABLE
+    assert comp.relationship in ("CONTRADICTS", "RECONCILABLE", "UNCERTAIN")
+
+
+def test_heuristic_rounding_with_different_period():
+    """Close rounding values but different period must NOT be CORROBORATES."""
+    f1 = Fact(subject="Delhivery", predicate="revenue", value=81415.38, unit="INR million",
+              period="FY23",
+              evidence=Evidence(document_id="d1", page_number=1, text="FY23 revenue 81415.38M"))
+    f2 = Fact(subject="Delhivery", predicate="revenue", value=81420.0, unit="INR million",
+              period="FY24",
+              evidence=Evidence(document_id="d2", page_number=1, text="FY24 revenue 81420M"))
+    pair = PreparedComparison(
+        fact_a=f1, fact_b=f2,
+        dimensions=Dimensions(subject="same", predicate="same", value="same", unit="same",
+                              period="different", scope="same", qualifiers="same"),
+        numerical_comparison=__import__("app.models", fromlist=["NumericalComparison"]).NumericalComparison(
+            is_numeric=True, status="close_rounding", is_close_rounding=True,
+            value_a_norm=81415.38, value_b_norm=81420.0, unit_norm="INR million",
+            absolute_diff=4.62, relative_diff=0.0000567,
+            rounding_note="Close rounding"
+        ),
+    )
+    comp = reason_comparison(pair)
+    # Rounding path requires period == "same", so this should NOT be CORROBORATES via rounding
+    assert comp.relationship != "CORROBORATES"

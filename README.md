@@ -110,9 +110,9 @@ Three institutional reports with overlapping facts about the Indian economy:
 
 **Case 1 — GDP Corroboration (RBI ↔ IMF):** Both RBI and IMF report India's real GDP growth at 6.5% for FY2025. The system classifies this as CORROBORATES — two independent institutions corroborating the same figure.
 
-**Case 2 — Estimate Vintage Reconciliation (Economic Survey vs RBI):** The Economic Survey references a 6.4% First Advance Estimate while RBI reports 6.5% (later revised figure). The system classifies this as RECONCILABLE — the difference is explained by data vintage, not a genuine factual conflict. This is *not* a clean contradiction; it requires contextual interpretation.
+**Case 2 — Estimate Vintage Reconciliation (Economic Survey vs RBI):** The Economic Survey references a 6.4% First Advance Estimate while RBI reports 6.5% Second Advance Estimate. The system classifies this as RECONCILABLE — the difference is explained by data vintage (First vs Second Advance Estimate), not a genuine factual conflict. This is *not* a clean contradiction; it requires contextual interpretation.
 
-**Case 3 — CPI Potential Conflict:** CPI inflation figures of 4.6% vs 4.4% appear across sources. The system treats this as a potential conflict requiring contextual interpretation rather than an unequivocal contradiction, because the figures may reference different sub-periods or estimation methodologies.
+**Case 3 — CPI Potential Conflict:** CPI inflation figures of 4.6% vs 4.4% appear across sources. The RBI figure is an actualized historical value while the IMF figure appears in its projection block. The system treats this as a potential conflict requiring contextual and vintage interpretation, not as an established contradiction.
 
 ### Delhivery Corporate Dataset
 
@@ -217,7 +217,7 @@ Works without any API key. Uses:
 - Rule-based relationship classification using dimension diffs (period, scope, qualifiers, units, values)
 - Threshold-based confidence scoring
 
-This mode is sufficient for the assignment demonstration and handles the provided starter datasets.
+This mode supports the current assignment demonstration and has been validated against the provided starter datasets.
 
 ### Provider-Backed LLM Mode
 
@@ -249,7 +249,7 @@ The full suite is verified in a fresh virtual environment from `requirements.txt
 
 ## Design Decisions and Trade-offs
 
-**SQLite instead of a graph database.** The assignment prefers a small prototype. SQLite provides zero-config persistence, full-text search, and relational joins without external dependencies. The data model is inherently relational (facts link to documents, comparisons link to facts), so a graph database adds complexity without proportional benefit at this scale.
+**SQLite instead of a graph database.** The assignment prefers a small prototype. SQLite provides zero-config persistence and relational querying without external dependencies. The data model is inherently relational (facts link to documents, comparisons link to facts), so a graph database adds complexity without proportional benefit at this scale.
 
 **Deterministic candidate prioritization.** Rather than sending every page to an LLM (expensive, slow, rate-limited), the system scores pages by financial keyword density, numeric content, table presence, and heading structure. This selects the most information-rich pages for extraction, reducing downstream cost.
 
@@ -257,7 +257,7 @@ The full suite is verified in a fresh virtual environment from `requirements.txt
 
 **Provider abstraction.** The `LLMProvider` ABC separates extraction and reasoning logic from any specific provider. `MockProvider` returns deterministic fixtures for testing. `AnthropicProvider` can be swapped in when an API key is available. The heuristic fallback operates when no provider is configured.
 
-**Plain HTML/JS UI.** The assignment constrains against a React frontend. The embedded single-page application uses vanilla JavaScript with fetch calls to the API. No build step, no node_modules, no framework overhead.
+**Plain HTML/JS UI.** We chose vanilla HTML, CSS, and JavaScript to avoid frontend build complexity. The embedded single-page application uses fetch calls to the API. No build step, no node_modules, no framework overhead.
 
 ## Limitations
 
@@ -266,22 +266,21 @@ The full suite is verified in a fresh virtual environment from `requirements.txt
 - **Offline reasoning semantic depth.** The heuristic reasoner uses dimension diffs and rule thresholds. It cannot match the nuanced contextual reasoning of a live LLM, particularly for complex multi-dimensional comparisons.
 - **No live LLM validation.** `ANTHROPIC_API_KEY` was unavailable during development. The provider-backed mode is structurally tested via `MockProvider` but not validated against real Anthropic API responses.
 - **Prototype-scale persistence.** SQLite is suitable for demonstration but would need migration to a production database (PostgreSQL, etc.) for concurrent multi-user workloads.
-- **Double PDF parsing.** The pipeline parses the PDF twice in `process_document_pipeline` (once for page objects, once for extraction). This is a minor inefficiency, not a correctness issue.
 
 ## AI Tools Used
 
 Development was assisted by:
 
-- **MiMo (mimo-v2.5-free)** — Primary implementation agent. Wrote the majority of application code, tests, and this README.
-- **Copilot** — Code review and suggestion support.
-- **Gemini 3.8 Flash** — Independent review at Gate 3+ for normalization logic, matching heuristics, and reasoner prompt validation.
+- **MiMo (mimo-v2.5-free)** — Primary implementation agent for Gates 0–2 and test infrastructure. Wrote regression tests, pipeline integration tests, and the initial README draft.
+- **Copilot** — Code review and suggestion support throughout development.
+- **Gemini 3.8 Flash High** — Implemented and reviewed substantial Gate 3–5 work including fact normalization, candidate matching, relationship reasoning, the heuristic classifier, provider abstraction, SQLite persistence, FastAPI endpoints, and the Fact Explorer UI. Performed independent review of normalization logic, matching heuristics, and reasoner prompt design.
 
 All AI-assisted code was reviewed, tested, and validated before commits. The author is responsible for design decisions, architecture, and correctness claims.
 
 ## Future Work
 
 - LLM-backed extraction for arbitrary document layouts
-- Full-text search with embeddings for semantic fact retrieval
+- Full-text search with embeddings for semantic fact retrieval (not part of current implementation)
 - Temporal versioning of facts (track how a metric changes across report releases)
 - Multi-page fact extraction (facts spanning table continuations)
 - Incremental re-ingestion (update knowledge base when new documents arrive)

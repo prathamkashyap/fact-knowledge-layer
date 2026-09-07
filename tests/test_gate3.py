@@ -743,3 +743,189 @@ def test_candidate_reduction_statistics():
     # Reduction ratio should be substantial (> 75%)
     assert stats.reduction_ratio >= 0.75
     assert stats.candidate_groups_count > 0
+
+
+# ---------------------------------------------------------------------------
+# 11. Edge-Case Regression Tests
+# ---------------------------------------------------------------------------
+
+def test_generate_candidate_pairs_empty_input():
+    """Empty fact list must produce zero pairs without crashing."""
+    pairs = generate_candidate_pairs([])
+    assert pairs == []
+    stats = compute_candidate_statistics([], pairs)
+    assert stats.total_facts == 0
+    assert stats.total_naive_pairs == 0
+    assert stats.candidate_pairs_count == 0
+
+
+def test_generate_candidate_pairs_all_unique_subjects():
+    """Facts with all different subjects produce zero candidate pairs."""
+    f1 = Fact(subject="Acme", predicate="revenue", value=100.0, unit="INR million",
+              period="FY24", evidence=Evidence(document_id="d1", page_number=1, text="Acme rev"))
+    f2 = Fact(subject="Bcorp", predicate="revenue", value=200.0, unit="INR million",
+              period="FY24", evidence=Evidence(document_id="d2", page_number=1, text="Bcorp rev"))
+    pairs = generate_candidate_pairs([f1, f2])
+    assert len(pairs) == 0
+
+
+def test_duplicate_evidence_filtered_out():
+    """Two facts with identical document, page, evidence text, and value must be filtered."""
+    f1 = Fact(subject="Delhivery", predicate="revenue", value=81415.38, unit="INR million",
+              period="FY24", evidence=Evidence(document_id="ar_fy24", page_number=36,
+              text="Revenue was INR 81,415.38 million.", document_name="AR.pdf"))
+    f2 = Fact(subject="Delhivery", predicate="revenue", value=81415.38, unit="INR million",
+              period="FY24", evidence=Evidence(document_id="ar_fy24", page_number=36,
+              text="Revenue was INR 81,415.38 million.", document_name="AR.pdf"))
+    pairs = generate_candidate_pairs([f1, f2], filter_irrelevant=True)
+    assert len(pairs) == 0
+
+
+def test_duplicate_evidence_different_value_not_filtered():
+    """Same document/page/text but different value must NOT be filtered."""
+    f1 = Fact(subject="Delhivery", predicate="revenue", value=81415.38, unit="INR million",
+              period="FY24", evidence=Evidence(document_id="ar_fy24", page_number=36,
+              text="Revenue was INR 81,415.38 million."))
+    f2 = Fact(subject="Delhivery", predicate="revenue", value=74540.82, unit="INR million",
+              period="FY24", evidence=Evidence(document_id="ar_fy24", page_number=36,
+              text="Revenue was INR 81,415.38 million."))
+    pairs = generate_candidate_pairs([f1, f2], filter_irrelevant=True)
+    assert len(pairs) == 1
+
+
+# ---------------------------------------------------------------------------
+# 12. Unit Conversion Edge Cases
+# ---------------------------------------------------------------------------
+
+def test_lakh_to_million_conversion():
+    v, u = normalize_unit_and_value(100.0, "lakh")
+    assert v == 10.0
+    assert u == "INR million"
+
+def test_lac_to_million_conversion():
+    v, u = normalize_unit_and_value(50.0, "lac")
+    assert v == 5.0
+    assert u == "INR million"
+
+def test_billion_to_million_conversion():
+    v, u = normalize_unit_and_value(1.5, "billion")
+    assert v == 1500.0
+    assert u == "INR million"
+
+def test_raw_inr_to_million_conversion():
+    v, u = normalize_unit_and_value(5000000.0, "INR")
+    assert v == 5.0
+    assert u == "INR million"
+
+def test_raw_rupee_symbol_to_million():
+    v, u = normalize_unit_and_value(10000000.0, "₹")
+    assert v == 10.0
+    assert u == "INR million"
+
+def test_raw_rs_to_million():
+    v, u = normalize_unit_and_value(2000000.0, "Rs.")
+    assert v == 2.0
+    assert u == "INR million"
+
+
+# ---------------------------------------------------------------------------
+# 13. Numeric-as-String Normalization
+# ---------------------------------------------------------------------------
+
+def test_numeric_string_promoted_to_float():
+    """A numeric string with commas should be promoted to float for unit conversion."""
+    v, u = normalize_unit_and_value("8,142", "₹ crore")
+    assert v == 81420.0
+    assert u == "INR million"
+
+def test_numeric_string_no_unit():
+    v, u = normalize_unit_and_value("6.5", "%")
+    assert v == 6.5
+    assert u == "percent"
+
+def test_non_numeric_string_passthrough():
+    v, u = normalize_unit_and_value("resigned from the Board", None)
+    assert v == "resigned from the Board"
+    assert u is None
+
+
+# ---------------------------------------------------------------------------
+# 14. Zero-Value Comparison
+# ---------------------------------------------------------------------------
+
+def test_zero_values_comparison():
+    """Both values zero: relative diff is 0.0 (guarded by max_val > 0)."""
+    comp = compare_numbers(0.0, "percent", 0.0, "percent")
+    assert comp.is_exact is True
+    assert comp.absolute_diff == 0.0
+    assert comp.relative_diff == 0.0
+
+def test_zero_vs_nonzero_comparison():
+    comp = compare_numbers(0.0, "INR million", 100.0, "INR million")
+    assert comp.is_exact is False
+    assert comp.is_close_rounding is False
+    assert comp.status == "different"
+
+
+# ---------------------------------------------------------------------------
+# 15. Anti-Shortcut: Same Number + Different Period
+# ---------------------------------------------------------------------------
+
+def test_anti_shortcut_same_number_different_period_not_corroboration():
+    """
+    Two facts with identical numeric value, same subject/predicate, but different
+    periods must NOT be classified as CORROBORATES by the matcher (period is 'different').
+    """
+    f1 = Fact(subject="Delhivery", predicate="network reach", value=16677.0, unit="pin codes",
+              period="FY21", evidence=Evidence(document_id="d1", page_number=1, text="16,677 PIN codes FY21"))
+    f2 = Fact(subject="Delhivery", predicate="network reach", value=16677.0, unit="pin codes",
+              period="FY22", evidence=Evidence(document_id="d2", page_number=1, text="16,677 PIN codes FY22"))
+    pairs = generate_candidate_pairs([f1, f2])
+    assert len(pairs) == 1
+    # Matcher must expose that period is different
+    assert pairs[0].dimensions.period == "different"
+    # Value is the same
+    assert pairs[0].dimensions.value == "same"
+    # Subject and predicate are the same
+    assert pairs[0].dimensions.subject == "same"
+    assert pairs[0].dimensions.predicate == "same"
+
+
+# ---------------------------------------------------------------------------
+# 16. Ambiguous-Period Fact Flows Through Candidate Pairs
+# ---------------------------------------------------------------------------
+
+def test_ambiguous_period_fact_generates_candidate_pair():
+    """A fact with period=None should still appear as a candidate when grouped by subject+predicate."""
+    f_ambiguous = Fact(
+        subject="India real GDP growth", predicate="growth rate", value=6.5, unit="%",
+        period=None,  # missing due to detached table header
+        evidence=Evidence(document_id="rbi_table", page_number=91, text="GDP growth 6.5% in 2024-25"),
+    )
+    f_actual = Fact(
+        subject="India real GDP growth", predicate="growth rate", value=6.5, unit="per cent",
+        period="2024-25",
+        evidence=Evidence(document_id="rbi_ar", page_number=24, text="GDP growth 6.5 per cent in 2024-25"),
+    )
+    pairs = generate_candidate_pairs([f_ambiguous, f_actual])
+    assert len(pairs) == 1
+    pair = pairs[0]
+    # The ambiguous fact's period should be unknown
+    assert pair.dimensions.period == "unknown"
+    assert pair.dimensions.subject == "same"
+    assert pair.dimensions.predicate == "same"
+
+
+# ---------------------------------------------------------------------------
+# 17. Negative Values Through Unit Conversion
+# ---------------------------------------------------------------------------
+
+def test_negative_value_crore_conversion():
+    v, u = normalize_unit_and_value(-500.0, "₹ crore")
+    assert v == -5000.0
+    assert u == "INR million"
+
+def test_negative_value_percent():
+    v, u = normalize_unit_and_value(-3.2, "%")
+    assert v == -3.2
+    assert u == "percent"

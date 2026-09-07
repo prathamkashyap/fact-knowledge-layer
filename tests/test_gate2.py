@@ -528,3 +528,64 @@ def test_parse_rejects_completely_empty_evidence():
             "evidence_text": "", "confidence": 0.9}]
     facts = _parse_extracted_facts(raw, "doc p.1")
     assert len(facts) == 0
+
+
+def test_parse_rejects_none_evidence_text():
+    """evidence_text as JSON null (None) must not crash .strip(); should be skipped."""
+    from app.extraction import _parse_extracted_facts
+    raw = [{"subject": "X", "predicate": "y", "value": 1.0,
+            "evidence_text": None, "confidence": 0.9}]
+    facts = _parse_extracted_facts(raw, "doc p.1")
+    assert len(facts) == 0
+
+
+def test_parse_skips_missing_evidence_text_key():
+    """Missing evidence_text key entirely should be treated as empty and skipped."""
+    from app.extraction import _parse_extracted_facts
+    raw = [{"subject": "X", "predicate": "y", "value": 1.0, "confidence": 0.9}]
+    facts = _parse_extracted_facts(raw, "doc p.1")
+    assert len(facts) == 0
+
+
+def test_parse_optional_keys_default_correctly():
+    """Optional keys (period, as_of, scope, qualifiers) missing from raw dict produce correct defaults."""
+    from app.extraction import _parse_extracted_facts
+    raw = [{
+        "subject": "Acme", "predicate": "revenue", "value": 100.0,
+        "evidence_text": "Revenue was 100.", "confidence": 0.9,
+        # period, as_of, scope, qualifiers, unit all absent
+    }]
+    facts = _parse_extracted_facts(raw, "doc p.5")
+    assert len(facts) == 1
+    f = facts[0]
+    assert f.period is None
+    assert f.as_of is None
+    assert f.scope is None
+    assert f.qualifiers == []
+    assert f.unit is None
+    assert f.evidence.document_name == "doc p.5"
+
+
+def test_parse_mixed_numeric_and_categorical():
+    """A single raw list can contain both numeric and categorical facts."""
+    from app.extraction import _parse_extracted_facts
+    raw = [
+        {"subject": "X", "predicate": "revenue", "value": 500.0,
+         "evidence_text": "Revenue was 500.", "confidence": 0.9},
+        {"subject": "Y", "predicate": "board status", "value": "resigned",
+         "evidence_text": "Y resigned.", "confidence": 0.9},
+    ]
+    facts = _parse_extracted_facts(raw, "doc p.1")
+    assert len(facts) == 2
+    assert isinstance(facts[0].value, float)
+    assert isinstance(facts[1].value, str)
+
+
+def test_parse_numeric_string_value():
+    """A numeric value delivered as a string should be preserved as-is (no silent cast)."""
+    from app.extraction import _parse_extracted_facts
+    raw = [{"subject": "X", "predicate": "count", "value": "1234",
+            "evidence_text": "Count is 1234.", "confidence": 0.9}]
+    facts = _parse_extracted_facts(raw, "doc p.1")
+    assert len(facts) == 1
+    assert facts[0].value == "1234"

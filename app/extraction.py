@@ -131,7 +131,8 @@ def _parse_extracted_facts(raw_facts: List[Dict[str, Any]], page_context: str) -
     """Parse raw tool-call output into Fact objects with evidence."""
     facts = []
     for f in raw_facts:
-        evidence_text = f.get("evidence_text", "").strip()
+        raw_ev = f.get("evidence_text")
+        evidence_text = (raw_ev or "").strip()
         if not evidence_text:
             continue  # skip facts with empty evidence
         facts.append(Fact(

@@ -10,6 +10,10 @@ Most PDF analysis tools treat documents as opaque text blobs. This system takes 
 
 The core insight is that a numerical difference between two sources is not automatically a contradiction. Context matters: reporting scope, data vintage, effective dates, unit conventions, and forecast vs. actual distinctions all determine whether two facts agree, disagree, or are simply measuring different things at different times.
 
+## Video Demo
+
+[Watch the ≤3-minute demo](https://drive.google.com/file/d/1YXpP6BZX0QCNputBu7vanfl3royLB2t3/view?usp=sharing)
+
 ## Key Features
 
 - **PDF ingestion** with PyMuPDF — extracts text blocks, detects tables, computes page-level scores
@@ -204,7 +208,7 @@ The Fact Explorer is a single-page application built with plain HTML, CSS, and J
 
 - **Fact Explorer** — Search and browse all extracted facts with evidence previews. Click any fact card for a detailed modal showing canonical forms, normalized values, source evidence, and all cross-document relationships.
 - **Cross-Document Relationships** — Browse all relationship pairs with filter buttons for CORROBORATES, RECONCILABLE, CONTRADICTS, and UNCERTAIN. Each card shows both facts side-by-side with dimension chips, source documents, and the reasoning rationale.
-- **Demonstration Cases** — Navigate directly to the verified assignment demonstration cases.
+- **Demonstration Cases** — Inspect the assignment's reasoning scenarios with transparent dimension differences, evidence, and decision rationales.
 - **Upload & Ingest** — Upload arbitrary PDFs through the browser. Processing happens server-side with progress feedback.
 - **Documents** — Table view of all ingested documents with page counts, candidate rates, fact counts, and processing times.
 

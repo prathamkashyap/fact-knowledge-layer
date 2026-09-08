@@ -114,6 +114,8 @@ The Economic Survey reports India's real GDP growth at 6.4% (First Advance Estim
 
 **Case 2 — CPI Potential Conflict:** CPI inflation figures of 4.6% vs 4.4% appear across sources. The RBI figure is an actualized historical value while the IMF figure appears in its projection block. The system treats this as a potential conflict requiring contextual and vintage interpretation, not as an established contradiction.
 
+The following cases represent the reasoning scenarios covered by the implementation and tests; the current offline starter-data run demonstrates the cases explicitly marked as verified live.
+
 ### Delhivery Corporate Dataset
 
 Three disclosure formats for the same logistics company:
@@ -222,7 +224,7 @@ This mode supports the current assignment demonstration and has been validated a
 
 ### Provider Abstraction
 
-The `LLMProvider` abstract base class defines interfaces for LLM-based fact extraction and relationship reasoning. `MockProvider` returns deterministic fixtures for testing. A production provider (e.g. Anthropic Claude) can be implemented and swapped in by setting an API key. The system always falls back to the heuristic mode when no provider is configured.
+The `LLMProvider` abstract base class defines interfaces for LLM-based fact extraction and relationship reasoning. `MockProvider` returns deterministic fixtures for testing. The `LLMProvider` abstraction is designed to support a production LLM provider in the future. The submitted runtime currently uses the deterministic offline implementation; no external LLM provider is required.
 
 ## Testing
 
@@ -252,7 +254,7 @@ The full suite is verified in a fresh virtual environment from `requirements.txt
 
 **Structured facts with evidence.** Every fact carries verbatim source text, document ID, and page number. This makes the system auditable — any extracted assertion can be traced back to its exact source sentence. The evidence trail is not optional metadata; it is a core design requirement.
 
-**Provider abstraction.** The `LLMProvider` ABC separates extraction and reasoning logic from any specific provider. `MockProvider` returns deterministic fixtures for testing. A production provider can be implemented and swapped in when an API key is available. The heuristic fallback operates when no provider is configured.
+**Provider abstraction.** The `LLMProvider` ABC separates extraction and reasoning logic from any specific provider. `MockProvider` returns deterministic fixtures for testing. The submitted runtime uses the deterministic offline implementation; the abstraction is an extension point for future LLM-backed extraction.
 
 **Plain HTML/JS UI.** We chose vanilla HTML, CSS, and JavaScript to avoid frontend build complexity. The embedded single-page application uses fetch calls to the API. No build step, no node_modules, no framework overhead.
 

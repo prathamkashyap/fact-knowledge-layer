@@ -56,16 +56,13 @@ def set_db(db: Database):
 def health_check():
     db = get_db()
     stats = db.get_stats()
-    has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    reasoning_mode = "llm" if has_anthropic else "heuristic"
 
     return {
         "status": "ok",
         "service": "Superjoin Fact Knowledge Layer",
         "version": "1.0.0",
         "database": "connected",
-        "reasoning_mode": reasoning_mode,
-        "has_api_key": has_anthropic,
+        "reasoning_mode": "heuristic",
         "stats": stats,
     }
 
@@ -76,8 +73,6 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         raise HTTPException(status_code=400, detail="No files uploaded.")
 
     db = get_db()
-    has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    reasoning_mode = "llm" if has_anthropic else "heuristic"
     results = []
 
     for file in files:
@@ -95,9 +90,9 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         try:
             res = process_document_pipeline(
                 pdf_path=save_path,
-                provider=None,  # Uses heuristic extractor when offline; provider if configured
+                provider=None,
                 db=db,
-                reasoning_mode=reasoning_mode,
+                reasoning_mode="heuristic",
             )
             results.append(res)
         except Exception as e:
@@ -580,7 +575,7 @@ HTML_UI = """<!DOCTYPE html>
                 document.getElementById('statPages').innerText = data.stats.total_pages;
                 document.getElementById('statFacts').innerText = data.stats.total_facts;
                 document.getElementById('statRels').innerText = data.stats.total_relationships;
-                document.getElementById('modeBadge').innerText = data.has_api_key ? 'LLM Provider Mode' : 'Offline / Heuristic Mode';
+                document.getElementById('modeBadge').innerText = 'Offline / Heuristic Mode';
             } catch(e) { console.error(e); }
         }
 
@@ -739,26 +734,53 @@ HTML_UI = """<!DOCTYPE html>
         async function filterDemoCase(caseType) {
             const container = document.getElementById('demoResults');
             container.innerHTML = '<p>Loading case demonstration...</p>';
-            
-            let query = '';
-            let targetRel = '';
-            if (caseType === 'gdp_corroborate') { query = 'GDP'; targetRel = 'CORROBORATES'; }
-            else if (caseType === 'cpi_investigate') { query = 'CPI'; }
-            else if (caseType === 'vintage_reconcile') { query = 'GDP'; targetRel = 'RECONCILABLE'; }
-            else if (caseType === 'director_reconcile') { query = 'Director'; targetRel = 'RECONCILABLE'; }
-            else if (caseType === 'scope_failure') { query = 'revenue'; targetRel = 'RECONCILABLE'; }
 
-            const res = await fetch(`/relationships?relationship=${targetRel}`);
-            const rels = await res.json();
-            
-            if (rels.length === 0) {
+            const res = await fetch('/relationships');
+            const allRels = await res.json();
+
+            let filtered = [];
+            if (caseType === 'gdp_corroborate') {
+                filtered = allRels.filter(r =>
+                    r.relationship === 'CORROBORATES' &&
+                    (r.fa_subject || '').toLowerCase().includes('gdp') &&
+                    (r.fb_subject || '').toLowerCase().includes('gdp')
+                );
+            } else if (caseType === 'cpi_investigate') {
+                filtered = allRels.filter(r =>
+                    (r.fa_subject || '').toLowerCase().includes('cpi') ||
+                    (r.fb_subject || '').toLowerCase().includes('cpi') ||
+                    (r.fa_subject || '').toLowerCase().includes('inflation') ||
+                    (r.fb_subject || '').toLowerCase().includes('inflation')
+                );
+            } else if (caseType === 'vintage_reconcile') {
+                filtered = allRels.filter(r =>
+                    r.relationship === 'RECONCILABLE' &&
+                    ((r.reason || '').toLowerCase().includes('vintage') ||
+                     (r.reason || '').toLowerCase().includes('advance estimate'))
+                );
+            } else if (caseType === 'director_reconcile') {
+                filtered = allRels.filter(r =>
+                    r.relationship === 'RECONCILABLE' &&
+                    ((r.reason || '').toLowerCase().includes('temporal') ||
+                     (r.reason || '').toLowerCase().includes('resignation') ||
+                     (r.reason || '').toLowerCase().includes('cessation') ||
+                     (r.reason || '').toLowerCase().includes('date'))
+                );
+            } else if (caseType === 'scope_failure') {
+                filtered = allRels.filter(r =>
+                    r.relationship === 'RECONCILABLE' &&
+                    r.dimensions && r.dimensions.scope === 'different'
+                );
+            }
+
+            if (filtered.length === 0) {
                 container.innerHTML = `<div style="background: #f8fafc; padding: 1rem; border-radius: 6px; border: 1px dashed var(--border);">
                     <p style="color: var(--text-muted);">Demonstration facts for this case have not been ingested yet. Ingest starter datasets to populate.</p>
                 </div>`;
                 return;
             }
 
-            container.innerHTML = rels.slice(0, 3).map(r => `
+            container.innerHTML = filtered.slice(0, 3).map(r => `
                 <div class="comparison-item" style="border-left: 4px solid var(--primary);">
                     <div class="comparison-header">
                         <span class="tag tag-${r.relationship.toLowerCase()}">${r.relationship}</span>

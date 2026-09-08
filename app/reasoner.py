@@ -221,7 +221,9 @@ def classify_relationship_heuristically(prepared: PreparedComparison) -> FactCom
             )
 
     # 5. Check for estimate vintage differences (e.g. First Advance Estimate vs Second Advance Estimate)
-    if dims.qualifiers == "different" and any("advance" in q.lower() for q in fa.qualifiers + fb.qualifiers):
+    all_quals = [q.lower() for q in fa.qualifiers + fb.qualifiers]
+    vintage_keywords = ("advance", "provisional", "revised", "preliminary", "estimated", "final", "first estimate", "second estimate")
+    if dims.value == "different" and dims.qualifiers == "different" and any(kw in q for q in all_quals for kw in vintage_keywords):
         q_a = ", ".join(fa.qualifiers) if fa.qualifiers else "standard"
         q_b = ", ".join(fb.qualifiers) if fb.qualifiers else "standard"
         return FactComparison(

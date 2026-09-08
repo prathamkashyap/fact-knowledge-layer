@@ -108,11 +108,11 @@ Three institutional reports with overlapping facts about the Indian economy:
 | `02-rbi-annual-report-2024-25-excerpt.pdf` | Reserve Bank of India |
 | `03-imf-india-2025-article-iv-excerpt.pdf` | IMF Article IV Consultation |
 
-**Case 1 — GDP Corroboration (RBI ↔ IMF):** Both RBI and IMF report India's real GDP growth at 6.5% for FY2025. The system classifies this as CORROBORATES — two independent institutions corroborating the same figure.
+**Case 1 — GDP Estimate Vintage Reconciliation (Economic Survey vs IMF) — VERIFIED LIVE:**
 
-**Case 2 — Estimate Vintage Reconciliation (Economic Survey vs RBI):** The Economic Survey references a 6.4% First Advance Estimate while RBI reports 6.5% Second Advance Estimate. The system classifies this as RECONCILABLE — the difference is explained by data vintage (First vs Second Advance Estimate), not a genuine factual conflict. This is *not* a clean contradiction; it requires contextual interpretation.
+The Economic Survey reports India's real GDP growth at 6.4% (First Advance Estimate) while the IMF reports 6.5% for the same period. The system classifies this as **RECONCILABLE** — the numerical difference is explained by data vintage (First Advance Estimate vs finalized figure), not a genuine factual conflict. The reasoner identifies the estimate-vintage qualifier and produces the explanation: *"Both figures refer to the same period, but represent different estimate vintages."*
 
-**Case 3 — CPI Potential Conflict:** CPI inflation figures of 4.6% vs 4.4% appear across sources. The RBI figure is an actualized historical value while the IMF figure appears in its projection block. The system treats this as a potential conflict requiring contextual and vintage interpretation, not as an established contradiction.
+**Case 2 — CPI Potential Conflict:** CPI inflation figures of 4.6% vs 4.4% appear across sources. The RBI figure is an actualized historical value while the IMF figure appears in its projection block. The system treats this as a potential conflict requiring contextual and vintage interpretation, not as an established contradiction.
 
 ### Delhivery Corporate Dataset
 
@@ -124,13 +124,13 @@ Three disclosure formats for the same logistics company:
 | `02-delhivery-annual-report-fy24-excerpt.pdf` | Annual Report FY24 |
 | `03-delhivery-q4-fy24-earnings-presentation.pdf` | Q4 FY24 Earnings Presentation |
 
-**Case 4 — Scope Distinction (Standalone vs Consolidated):** Revenue figures differ between standalone and consolidated reporting bases. The system classifies this as RECONCILABLE — the scope distinction explains the numerical difference.
+**Case 3 — Scope Distinction (Standalone vs Consolidated):** Revenue figures differ between standalone (₹74,540.82 million) and consolidated (₹81,415.38 million) reporting bases. The system classifies this as RECONCILABLE — the scope distinction explains the numerical difference.
 
-**Case 5 — Director Temporal Reconciliation:** Director appointment/resignation timelines reference different as-of dates across the prospectus and annual report. The system classifies these as RECONCILABLE — the facts are consistent when the effective dates are considered.
+**Case 4 — Director Temporal Reconciliation:** Director appointment/resignation timelines reference different as-of dates across the prospectus and annual report. The system classifies these as RECONCILABLE — the facts are consistent when the effective dates are considered.
 
-**Case 6 — Rounding/Unit Normalization:** Revenue expressed as ₹8,142 crore in one source and ₹81,415.38 million in another. After unit conversion to INR million, these match. The system classifies this as CORROBORATES.
+**Case 5 — Rounding/Unit Normalization:** Revenue expressed as ₹8,142 crore in one source and ₹81,415.38 million in another. After unit conversion to INR million, these match. The system classifies this as CORROBORATES.
 
-**Case 7 — Ambiguous Table Extraction:** Some table data has detached headers or ambiguous period associations. The system classifies these as UNCERTAIN rather than forcing a relationship judgment.
+**Case 6 — Ambiguous Table Extraction:** Some table data has detached headers or ambiguous period associations. The system classifies these as UNCERTAIN rather than forcing a relationship judgment.
 
 ## Setup
 
@@ -206,7 +206,7 @@ The Fact Explorer is a single-page application built with plain HTML, CSS, and J
 - **Upload & Ingest** — Upload arbitrary PDFs through the browser. Processing happens server-side with progress feedback.
 - **Documents** — Table view of all ingested documents with page counts, candidate rates, fact counts, and processing times.
 
-The header displays a reasoning-mode badge (Offline/Heuristic or LLM Provider Mode) and aggregate statistics.
+The header displays the reasoning mode badge (Offline / Heuristic Mode) and aggregate statistics.
 
 ## Reasoning Modes
 
@@ -215,17 +215,14 @@ The header displays a reasoning-mode badge (Offline/Heuristic or LLM Provider Mo
 Works without any API key. Uses:
 - Deterministic regex patterns for fact extraction from financial text
 - Rule-based relationship classification using dimension diffs (period, scope, qualifiers, units, values)
+- Estimate-vintage detection for reconciling different advance/provisional/preliminary figures
 - Threshold-based confidence scoring
 
 This mode supports the current assignment demonstration and has been validated against the provided starter datasets.
 
-### Provider-Backed LLM Mode
+### Provider Abstraction
 
-When `ANTHROPIC_API_KEY` is set, the system switches to:
-- LLM-based fact extraction via the `LLMProvider` abstraction
-- LLM-based relationship reasoning with structured prompts and strict epistemic rules
-
-Live Anthropic reasoning was not validated during development because `ANTHROPIC_API_KEY` was unavailable in the development environment. The provider abstraction is tested using `MockProvider` fixtures.
+The `LLMProvider` abstract base class defines interfaces for LLM-based fact extraction and relationship reasoning. `MockProvider` returns deterministic fixtures for testing. A production provider (e.g. Anthropic Claude) can be implemented and swapped in by setting an API key. The system always falls back to the heuristic mode when no provider is configured.
 
 ## Testing
 
@@ -255,23 +252,22 @@ The full suite is verified in a fresh virtual environment from `requirements.txt
 
 **Structured facts with evidence.** Every fact carries verbatim source text, document ID, and page number. This makes the system auditable — any extracted assertion can be traced back to its exact source sentence. The evidence trail is not optional metadata; it is a core design requirement.
 
-**Provider abstraction.** The `LLMProvider` ABC separates extraction and reasoning logic from any specific provider. `MockProvider` returns deterministic fixtures for testing. `AnthropicProvider` can be swapped in when an API key is available. The heuristic fallback operates when no provider is configured.
+**Provider abstraction.** The `LLMProvider` ABC separates extraction and reasoning logic from any specific provider. `MockProvider` returns deterministic fixtures for testing. A production provider can be implemented and swapped in when an API key is available. The heuristic fallback operates when no provider is configured.
 
 **Plain HTML/JS UI.** We chose vanilla HTML, CSS, and JavaScript to avoid frontend build complexity. The embedded single-page application uses fetch calls to the API. No build step, no node_modules, no framework overhead.
 
 ## Limitations
 
-- **Heuristic extraction coverage.** The regex-based extractor handles common financial sentence patterns (GDP growth, revenue figures, director events) but does not cover all possible fact formats. An LLM-backed extractor would handle arbitrary document layouts.
+- **Heuristic extraction coverage.** The regex-based extractor handles common financial sentence patterns (GDP growth, revenue figures, director events) but does not cover all possible fact formats. Unsupported wording or table layouts may result in `UNCERTAIN` or no extracted fact. An LLM-backed extractor would handle arbitrary document layouts.
 - **Table layout ambiguity.** PyMuPDF's table detection does not always associate column headers with data cells correctly. This can result in UNCERTAIN classifications for table-extracted facts.
 - **Offline reasoning semantic depth.** The heuristic reasoner uses dimension diffs and rule thresholds. It cannot match the nuanced contextual reasoning of a live LLM, particularly for complex multi-dimensional comparisons.
-- **No live LLM validation.** `ANTHROPIC_API_KEY` was unavailable during development. The provider-backed mode is structurally tested via `MockProvider` but not validated against real Anthropic API responses.
 - **Prototype-scale persistence.** SQLite is suitable for demonstration but would need migration to a production database (PostgreSQL, etc.) for concurrent multi-user workloads.
 
 ## AI Tools Used
 
 Development was assisted by:
 
-- **MiMo (mimo-v2.5-free)** — Primary implementation agent for Gates 0–2 and test infrastructure. Wrote regression tests, pipeline integration tests, and the initial README draft.
+- **MiMo (mimo-v2.5-free)** — Primary implementation agent for Gates 0–2 and test infrastructure. Wrote regression tests, pipeline integration tests, and the initial README draft. Performed post-change verification passes and surgical bug fixes.
 - **Copilot** — Code review and suggestion support throughout development.
 - **Gemini 3.8 Flash High** — Implemented and reviewed substantial Gate 3–5 work including fact normalization, candidate matching, relationship reasoning, the heuristic classifier, provider abstraction, SQLite persistence, FastAPI endpoints, and the Fact Explorer UI. Performed independent review of normalization logic, matching heuristics, and reasoner prompt design.
 

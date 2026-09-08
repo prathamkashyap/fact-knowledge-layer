@@ -15,6 +15,45 @@ from app.reasoner import reason_all_comparisons
 from app.database import Database
 
 
+def _extract_entity_from_context(filename: str) -> str:
+    """Extract a likely entity/organization name from the PDF filename for use as a fallback subject."""
+    name = os.path.splitext(filename)[0]
+    name = re.sub(r'^\d+[-_]', '', name)
+    name = re.sub(r'[-_]+', ' ', name).strip()
+    name = re.sub(r'\b(excerpt|annual|report|prospectus|presentation|document|pdf|economy|economic|survey|article|iv|consultation)\b', '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(fy\d{2,4}|\d{4}[-/]\d{2,4}|\d{4})\b', '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\s+', ' ', name).strip()
+    words = [w for w in name.split() if len(w) > 2]
+    return ' '.join(words[:3]) if words else "Unknown Entity"
+
+
+def _detect_qualifiers_near_match(full_text: str, match_start: int, match_end: int, window: int = 300) -> List[str]:
+    """Detect estimate-vintage and forecast qualifiers within a sentence window around a regex match."""
+    text_lower = full_text.lower()
+    start = max(0, match_start - window)
+    end = min(len(text_lower), match_end + window)
+    context = text_lower[start:end]
+
+    qualifiers: List[str] = []
+    if "first advance" in context:
+        qualifiers.append("First Advance Estimate")
+    elif "second advance" in context:
+        qualifiers.append("Second Advance Estimates")
+    if "provisional" in context:
+        qualifiers.append("provisional")
+    if "revised" in context:
+        qualifiers.append("revised")
+    if "preliminary" in context:
+        qualifiers.append("preliminary")
+    if "final" in context and "final" not in qualifiers:
+        qualifiers.append("final")
+    if "estimated" in context:
+        qualifiers.append("estimated")
+    if "projected" in context or "projected" in full_text[match_start:match_end].lower():
+        qualifiers.append("forecast")
+    return qualifiers
+
+
 def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
     """
     Deterministic rule-based extractor for candidate pages when running in offline/heuristic mode.
@@ -31,22 +70,16 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
     # 1. Real GDP Growth assertions:
     gdp_patterns = [
         # "real GDP grew by 6.5 percent in FY2024/25"
-        r"(India(?:'s)?\s+real\s+GDP\s+(?:grew\s+by|is\s+estimated\s+to\s+grow\s+by)\s+(\d+\.?\d*)\s*(?:per\s*cent|percent|%)\s*(?:in\s+)?(FY\d{2,4}(?:[-/]\d{2,4})?|\b20\d{2}-\d{2}\b)?)",
+        r"((?:[A-Z][\w\s\'']+?)?\s*real\s+GDP\s+(?:grew\s+by|is\s+estimated\s+to\s+grow\s+by)\s+(\d+\.?\d*)\s*(?:per\s*cent|percent|%)\s*(?:in\s+)?(FY\d{2,4}(?:[-/]\d{2,4})?|\b20\d{2}-\d{2}\b)?)",
         # "Real GDP growth moderated to 6.5 per cent in 2024-25"
-        r"(Real\s+GDP\s+growth\s+(?:moderated\s+to|stood\s+at|projected\s+at)\s+(\d+\.?\d*)\s*(?:per\s*cent|percent|%)\s*(?:in\s+)?(FY\d{2,4}(?:[-/]\d{2,4})?|\b20\d{2}-\d{2}\b)?)",
+        r"((?:[A-Z][\w\s\'']+?)?\s*Real\s+GDP\s+growth\s+(?:moderated\s+to|stood\s+at|projected\s+at)\s+(\d+\.?\d*)\s*(?:per\s*cent|percent|%)\s*(?:in\s+)?(FY\d{2,4}(?:[-/]\d{2,4})?|\b20\d{2}-\d{2}\b)?)",
     ]
     for pat in gdp_patterns:
         for match in re.finditer(pat, full_clean_text, re.IGNORECASE):
             sentence = match.group(1).strip()
             val_str = match.group(2)
             period_str = match.group(3) if len(match.groups()) >= 3 else None
-            qualifiers = []
-            if "first advance" in full_clean_text.lower():
-                qualifiers.append("First Advance Estimate")
-            elif "second advance" in full_clean_text.lower():
-                qualifiers.append("Second Advance Estimates")
-            if "projected" in sentence.lower():
-                qualifiers.append("forecast")
+            qualifiers = _detect_qualifiers_near_match(full_clean_text, match.start(), match.end())
 
             facts.append(Fact(
                 subject="India real GDP growth",
@@ -92,6 +125,40 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
             confidence=0.95,
         ))
 
+    # Broader revenue pattern: "Revenue from operations stood at INR N million"
+    rev_broad = re.compile(
+        r"((?:[\w\s]+?)\s+revenue\s+(?:from\s+[\w\s]+?\s+)?(?:stood\s+at|was|is)\s+(?:INR|₹)\s*([\d,]+\.?\d*)\s*(million|mn|crore|cr|lakh|lac|billion)\b)",
+        re.IGNORECASE
+    )
+    for match in rev_broad.finditer(full_clean_text):
+        sentence = match.group(1).strip()
+        val = float(match.group(2).replace(",", ""))
+        unit_raw = match.group(3).lower()
+        unit = "INR million" if unit_raw in ("million", "mn") else ("₹ crore" if unit_raw in ("crore", "cr") else ("lakh" if unit_raw in ("lakh", "lac") else "billion"))
+        # Skip if this was already captured by the exact pattern above
+        already_captured = any(
+            abs(val - (f.value * (10.0 if f.unit == "₹ crore" else 1.0))) < 0.01
+            for f in facts if f.predicate == "revenue"
+        )
+        if not already_captured:
+            entity = _extract_entity_from_context(page.filename)
+            facts.append(Fact(
+                subject=f"{entity} revenue",
+                predicate="revenue",
+                value=val,
+                unit=unit,
+                period=None,
+                scope=None,
+                qualifiers=[],
+                evidence=Evidence(
+                    document_id=page.document_id,
+                    page_number=page.page_number,
+                    text=sentence,
+                    document_name=page.filename,
+                ),
+                confidence=0.85,
+            ))
+
     # Revenue from services (presentation format):
     pres_rev = re.compile(
         r"(revenue\s+from\s+services\s+stood\s+at\s+(?:approximately\s+)?₹?([\d,]+\.?\d*)\s*(?:cr|crore)\s+for\s+(FY\d{2,4}))",
@@ -101,14 +168,15 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
         sentence = match.group(1).strip()
         val = float(match.group(2).replace(",", ""))
         period = match.group(3).upper()
+        entity = _extract_entity_from_context(page.filename)
         facts.append(Fact(
-            subject="Delhivery revenue from services",
+            subject=f"{entity} revenue from services",
             predicate="revenue",
             value=val,
             unit="₹ crore",
             period=period,
             scope="consolidated",
-            qualifiers=["excluding traded goods"],
+            qualifiers=[],
             evidence=Evidence(
                 document_id=page.document_id,
                 page_number=page.page_number,
@@ -126,15 +194,18 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
     for pat in loss_patterns:
         for match in pat.finditer(full_clean_text):
             sentence = match.group(1).strip()
-            if len(match.groups()) == 2:
-                val = float(match.group(2).replace(",", ""))
-                period = "FY24"
-            else:
+            # Pattern 1: 2 groups (sentence, value) — no period
+            # Pattern 2: 3 groups (sentence, period, value)
+            if match.lastindex and match.lastindex >= 3:
                 period = match.group(2).upper()
                 val = float(match.group(3).replace(",", ""))
+            else:
+                val = float(match.group(2).replace(",", ""))
+                period = None
             unit = "₹ crore" if "cr" in sentence.lower() else "INR million"
+            entity = _extract_entity_from_context(page.filename)
             facts.append(Fact(
-                subject="Delhivery net loss",
+                subject=f"{entity} net loss" if entity else "net loss",
                 predicate="loss for the year",
                 value=val,
                 unit=unit,
@@ -151,17 +222,23 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
             ))
 
     # 4. Director events / governance:
+    # Patterns 1-2 use IGNORECASE for action words (resigned/ceased); pattern 3 must NOT
+    # use IGNORECASE so that [A-Z] correctly rejects non-name text fragments.
     director_patterns = [
         re.compile(r"([A-Z][a-zA-Z\.\s]+?),\s*(?:Non-Executive\s+Director|Director),\s*(resigned\s+from\s+the\s+Board)\s+with\s+effect\s+from\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})", re.IGNORECASE),
         re.compile(r"([A-Z][a-zA-Z\.\s]+?)(?:,\s*Non-Executive\s+Director)?\s*(ceased\s+to\s+be\s+a\s+Director)\s+with\s+effect\s+from\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})", re.IGNORECASE),
-        re.compile(r"([A-Z][a-zA-Z\.\s]+?)\s*[—–-]\s*(Executive\s+Director(?:\s+and\s+[A-Za-z\s]+)?|Non-Executive\s+Nominee\s+Director)", re.IGNORECASE),
+        re.compile(r"([A-Z][a-z]+(?:\s+(?:de\s+|di\s+|van\s+|von\s+)?[A-Z][a-z]+)+)\s*[—–-]\s*(Executive\s+Director(?:\s+and\s+[A-Za-z\s]+)?|Non-Executive\s+Nominee\s+Director)"),
     ]
+    invalid_name_trailing = {"the", "to", "for", "and", "or", "of", "in", "on", "by", "our", "non", "none"}
     for pat in director_patterns:
         for match in pat.finditer(full_clean_text):
             sentence = match.group(0).strip()
             person = match.group(1).strip().replace("Mr.", "").replace("Ms.", "").strip()
             action_or_role = match.group(2).strip()
             as_of_date = match.group(3).strip() if len(match.groups()) >= 3 else None
+            last_word = person.split()[-1].lower() if person.split() else ""
+            if last_word in invalid_name_trailing or len(person.split()) < 2:
+                continue
             facts.append(Fact(
                 subject=person,
                 predicate="board status" if as_of_date else "role",

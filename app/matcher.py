@@ -28,7 +28,7 @@ def _cmp_qualifiers(x: List[str], y: List[str]) -> str:
     if not x and not y:
         return "same"
     if not x or not y:
-        return "unknown"
+        return "different"
     xs = {s.strip().lower() for s in x}
     ys = {s.strip().lower() for s in y}
     return "same" if xs == ys else "different"

@@ -19,10 +19,26 @@ from app.pdf_parser import DocumentIngestionResult, PageObject
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "fact_layer.db")
 
 
+def resolve_default_db_path() -> str:
+    """Return the DB path used when no path is passed to ``Database``.
+
+    Honors the ``FACT_LAYER_DB_PATH`` environment variable; when it is unset
+    or empty, falls back to the default ``data/fact_layer.db``. The variable
+    is read at construction time so it can be set in the process environment
+    before the server starts.
+    """
+    env_path = os.environ.get("FACT_LAYER_DB_PATH")
+    if env_path:
+        return env_path
+    return DEFAULT_DB_PATH
+
+
 class Database:
     """Thread-safe SQLite storage for the Fact Knowledge Layer."""
 
-    def __init__(self, db_path: str = DEFAULT_DB_PATH):
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None:
+            db_path = resolve_default_db_path()
         self.db_path = db_path
         if db_path != ":memory:":
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)

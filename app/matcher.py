@@ -1,5 +1,5 @@
 """
-Candidate matching and comparison preparation for the Superjoin Fact Knowledge Layer.
+Candidate matching and comparison preparation for the Fact Knowledge Layer.
 Groups facts by canonical subject and predicate, filters out obviously irrelevant pairs,
 and prepares structured comparison inputs with deterministic dimension diffs.
 NOTE: Does NOT assign the final relationship (that is Gate 4's responsibility).

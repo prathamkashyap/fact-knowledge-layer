@@ -1,5 +1,5 @@
 """
-FastAPI application for the Superjoin Fact Knowledge Layer.
+FastAPI application for the Fact Knowledge Layer.
 Exposes REST API and plain HTML/CSS/JavaScript Fact Explorer UI:
 - GET /health
 - POST /upload
@@ -24,7 +24,7 @@ from app.providers import LLMProvider, MockProvider
 
 
 app = FastAPI(
-    title="Superjoin Fact Knowledge Layer",
+    title="Fact Knowledge Layer",
     description="Evidence-grounded cross-document fact extraction and epistemic reasoning engine.",
     version="1.0.0",
 )
@@ -59,7 +59,7 @@ def health_check():
 
     return {
         "status": "ok",
-        "service": "Superjoin Fact Knowledge Layer",
+        "service": "Fact Knowledge Layer",
         "version": "1.0.0",
         "database": "connected",
         "reasoning_mode": "heuristic",
@@ -176,7 +176,7 @@ HTML_UI = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Superjoin Fact Knowledge Layer</title>
+    <title>Fact Knowledge Layer</title>
     <style>
         :root {
             --bg: #f8fafc;
@@ -443,7 +443,7 @@ HTML_UI = """<!DOCTYPE html>
 <body>
     <header>
         <div class="header-title">
-            <h1>Superjoin Fact Knowledge Layer</h1>
+            <h1>Fact Knowledge Layer</h1>
             <p>Evidence-grounded cross-document fact extraction and epistemic reasoning</p>
         </div>
         <div class="badge-mode" id="modeBadge">Offline / Heuristic Mode</div>

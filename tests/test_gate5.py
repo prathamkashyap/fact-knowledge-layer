@@ -59,7 +59,7 @@ def test_health_endpoint(client_and_db):
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ok"
-    assert data["service"] == "Superjoin Fact Knowledge Layer"
+    assert data["service"] == "Fact Knowledge Layer"
     assert "stats" in data
     assert "reasoning_mode" in data
 
@@ -223,7 +223,7 @@ def test_ui_served_at_root(client_and_db):
     res = client.get("/")
     assert res.status_code == 200
     assert "text/html" in res.headers["content-type"]
-    assert "Superjoin Fact Knowledge Layer" in res.text
+    assert "Fact Knowledge Layer" in res.text
     assert "Fact Explorer" in res.text
     assert "Cross-Document Relationships" in res.text
     assert "Upload & Ingest" in res.text
@@ -233,7 +233,7 @@ def test_ui_served_at_ui_route(client_and_db):
     client, _ = client_and_db
     res = client.get("/ui")
     assert res.status_code == 200
-    assert "Superjoin Fact Knowledge Layer" in res.text
+    assert "Fact Knowledge Layer" in res.text
 
 
 # ---------------------------------------------------------------------------

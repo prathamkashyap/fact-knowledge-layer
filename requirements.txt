@@ -9,5 +9,5 @@ pymupdf>=1.24.0
 pytest>=8.0.0
 httpx>=0.27.0
 
-# Optional Provider (for live Claude API integration when ANTHROPIC_API_KEY is configured)
-# anthropic>=0.25.0
+# Optional LLM provider (not required — the default runtime is offline/heuristic).
+# Add your chosen provider SDK here only if you wire in a concrete LLMProvider.

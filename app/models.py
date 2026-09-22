@@ -1,5 +1,5 @@
 """
-Production fact schema for the Superjoin Fact Knowledge Layer.
+Production fact schema for the Fact Knowledge Layer.
 Based on the validated Phase 0 spike, extended with evidence grounding
 and as_of/effective-date support.
 """

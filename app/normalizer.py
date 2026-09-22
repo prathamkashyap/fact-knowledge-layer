@@ -1,5 +1,5 @@
 """
-Conservative fact normalizer and canonicalizer for the Superjoin Fact Knowledge Layer.
+Conservative fact normalizer and canonicalizer for the Fact Knowledge Layer.
 Handles:
 - Entity canonicalization (stripping corporate legal suffixes, resolving anaphora with context)
 - Predicate canonicalization (standardizing reporting metrics into candidate groupings)

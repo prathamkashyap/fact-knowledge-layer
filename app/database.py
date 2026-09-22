@@ -1,5 +1,5 @@
 """
-SQLite persistence layer for the Superjoin Fact Knowledge Layer.
+SQLite persistence layer for the Fact Knowledge Layer.
 Stores:
 - Ingested documents and page metadata
 - Grounded extracted facts and evidence links

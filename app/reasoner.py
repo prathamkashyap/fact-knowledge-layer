@@ -1,5 +1,5 @@
 """
-Semantic relationship reasoning layer for the Superjoin Fact Knowledge Layer.
+Semantic relationship reasoning layer for the Fact Knowledge Layer.
 Takes Gate 3 PreparedComparison objects and determines:
 - CORROBORATES
 - CONTRADICTS

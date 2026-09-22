@@ -1,4 +1,4 @@
-# Superjoin Fact Knowledge Layer
+# Fact Knowledge Layer
 
 A grounded fact extraction and cross-document epistemic reasoning system for the VIT 2026 Engineering Intern assignment.
 
@@ -142,7 +142,7 @@ Three disclosure formats for the same logistics company:
 
 ```bash
 git clone <repository-url>
-cd Superjoin
+cd fact-knowledge-layer
 
 # Create virtual environment
 python3 -m venv .venv

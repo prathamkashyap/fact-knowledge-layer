@@ -1,290 +1,324 @@
 # Fact Knowledge Layer
 
-A grounded fact extraction and cross-document epistemic reasoning system for the VIT 2026 Engineering Intern assignment.
+> Grounded cross-document fact extraction and epistemic reasoning engine.
 
-The system ingests PDFs, extracts structured factual assertions with verbatim source evidence, normalizes metrics across documents, and determines whether cross-document fact pairs corroborate, contradict, reconcile, are unrelated, or remain uncertain.
+Originally developed for the VIT 2026 Engineering Intern assignment, this repository provides a complete, deterministic, and auditable pipeline that parses multi-page PDFs, extracts structured factual assertions with verbatim source evidence, normalizes metrics across sources, and determines whether cross-document fact pairs **corroborate**, **contradict**, **reconcile**, or remain **uncertain**.
 
-## Overview
+---
 
-Most PDF analysis tools treat documents as opaque text blobs. This system takes a different approach: it extracts **grounded, independently attributable factual assertions** — each tied to a specific document, page, and source sentence — and then reasons about how those facts relate to each other across documents.
+## At a Glance
 
-The core insight is that a numerical difference between two sources is not automatically a contradiction. Context matters: reporting scope, data vintage, effective dates, unit conventions, and forecast vs. actual distinctions all determine whether two facts agree, disagree, or are simply measuring different things at different times.
+- **Evidence-grounded:** Every extracted fact links directly to a document ID, page number, and verbatim source sentence. No hallucinations or ungrounded assertions.
+- **Epistemic reasoning:** A numerical difference is not automatically a contradiction. Context—such as reporting scope, estimate vintages, effective dates, and forecast vs. actual status—governs how facts relate.
+- **Fully offline by default:** Runs out of the box with zero external API dependencies or costs using deterministic rule-based extraction and dimension diff reasoning.
+- **Provider-ready abstraction:** Clean `LLMProvider` abstract interface ready for external model providers without rewriting pipeline logic.
+- **Zero-build UI:** Instant single-page Fact Explorer served directly by FastAPI using vanilla HTML, CSS, and modern JavaScript.
 
-## Video Demo
+[Watch the ≤3-minute video demo](https://drive.google.com/file/d/1YXpP6BZX0QCNputBu7vanfl3royLB2t3/view?usp=sharing)
 
-[Watch the ≤3-minute demo](https://drive.google.com/file/d/1YXpP6BZX0QCNputBu7vanfl3royLB2t3/view?usp=sharing)
+---
 
-## Key Features
+## Quickstart
 
-- **PDF ingestion** with PyMuPDF — extracts text blocks, detects tables, computes page-level scores
-- **Deterministic candidate-page prioritization** — ranks pages by financial keyword density, numeric content, table presence, and heading structure
-- **Structured fact extraction** — pulls subject/predicate/value/unit/period/scope/qualifiers with verbatim evidence
-- **Evidence grounding** — every fact links to a specific document, page, and source sentence
-- **Entity and predicate canonicalization** — normalizes corporate names, metric terms, and reporting language
-- **Period normalization** — handles FY2024, 2024-25, Q4 FY24, calendar dates into comparable forms
-- **Unit conversion** — INR crore to INR million, lakh to million, billion to million; percentage standardization
-- **Numerical comparability analysis** — exact match, close-rounding detection, incompatible-unit flagging
-- **Cross-document candidate matching** — groups by canonical subject+predicate, filters irrelevant pairs, computes dimension diffs
-- **Epistemic relationship reasoning** — classifies CORROBORATES / CONTRADICTS / RECONCILABLE / UNRELATED / UNCERTAIN with confidence and rationale
-- **SQLite persistence** — stores documents, pages, facts, comparisons with full evidence trails
-- **FastAPI REST API** — 10 endpoints for upload, query, and exploration
-- **Fact Explorer UI** — plain HTML/CSS/JS interface with search, detail modals, relationship browsing, and demonstration cases
-- **Offline heuristic fallback** — works without any API key using deterministic pattern matching
-- **Provider abstraction** — swap in any LLM provider (e.g. Anthropic Claude) via a simple ABC interface
+Run a fresh clone from terminal to interactive UI in under two minutes:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/prathamkashyap/fact-knowledge-layer.git
+cd fact-knowledge-layer
+
+# 2. Set up virtual environment and install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Verify regression test suite (198+ passing)
+python -m pytest tests/ -q
+
+# 4. Load the bundled starter demo database
+python scripts/load_starter_demo.py
+
+# 5. Launch the application against the demo database
+FACT_LAYER_DB_PATH=data/demo.db uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Open **[http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)** in your browser. Real facts, cross-document comparisons, and evidence trails are visible immediately.
+
+> **Clean Knowledge Base Mode:** Running the server without `FACT_LAYER_DB_PATH` starts a clean, empty knowledge base at `data/fact_layer.db`:
+> ```bash
+> uvicorn app.main:app --host 127.0.0.1 --port 8000
+> ```
+
+---
 
 ## Architecture
 
+The system follows a linear, deterministic pipeline where each stage has a single responsibility and clean boundaries:
+
 ```
-PDF → PyMuPDF Parse → Candidate Page Prioritization → Fact Extraction
-    → Normalization → Candidate Matching → Relationship Reasoning → SQLite → FastAPI / UI
+PDF Document
+    │
+    ▼
+[ 1. PyMuPDF Parser ] ─── Extract text blocks, detect tables, score candidate pages
+    │
+    ▼
+[ 2. Fact Extraction ] ── Pull structured assertions (Subject, Predicate, Value, Unit, Period, Evidence)
+    │
+    ▼
+[ 3. Normalization ] ──── Canonicalize entities & metrics, standardize units & fiscal periods
+    │
+    ▼
+[ 4. Candidate Matching ] Group by canonical subject+predicate, compute deterministic dimension diffs
+    │
+    ▼
+[ 5. Epistemic Reasoner ] Classify relationship (CORROBORATES, CONTRADICTS, RECONCILABLE, etc.)
+    │
+    ▼
+[ 6. SQLite Persistence ] Thread-safe storage with search indices & foreign key cascades
+    │
+    ▼
+[ 7. FastAPI & UI ] ───── REST API + embedded zero-build Fact Explorer UI
 ```
 
-### Pipeline Stages
+### Pipeline Modules
 
-| Stage | Module | Purpose |
+| Stage | Module | Responsibility |
 |---|---|---|
-| **Parse** | `pdf_parser.py` | Extract text blocks, detect tables, compute page scores using PyMuPDF |
-| **Prioritize** | `pdf_parser.py` | Rank pages by financial relevance; select top candidates for extraction |
-| **Extract** | `pipeline.py` | Pull structured facts from candidate pages using heuristic patterns or LLM provider |
-| **Normalize** | `normalizer.py` | Canonicalize entities/predicates, normalize periods, convert units, assess numerical comparability |
-| **Match** | `matcher.py` | Group facts by canonical subject+predicate, generate candidate pairs, compute dimension diffs |
-| **Reason** | `reasoner.py` | Classify cross-document relationships using heuristic rules or LLM prompt with strict epistemic rules |
-| **Persist** | `database.py` | Store everything in SQLite with full evidence and reasoning traces |
-| **Serve** | `main.py` | FastAPI application with REST endpoints and embedded HTML/CSS/JS UI |
+| **Parse & Prioritize** | `app/pdf_parser.py` | Extracts text and tables; prioritizes high-density candidate pages via keyword and numeric scoring. |
+| **Extraction** | `app/pipeline.py`, `app/extraction.py` | Pulls grounded facts with verbatim source evidence sentences from candidate pages. |
+| **Normalization** | `app/normalizer.py` | Canonicalizes company names and metrics; converts units (e.g. crore to million); normalizes fiscal periods. |
+| **Matching** | `app/matcher.py` | Pairs facts sharing canonical subjects/predicates; evaluates per-dimension sameness (period, unit, scope, qualifiers). |
+| **Reasoning** | `app/reasoner.py` | Applies strict epistemic rules to dimension diffs to classify relationship type, confidence, and rationale. |
+| **Storage** | `app/database.py` | Thread-safe SQLite persistence for documents, pages, grounded facts, comparisons, and full audit traces. |
+| **Interface** | `app/main.py` | FastAPI application exposing REST endpoints and the responsive, single-page Fact Explorer UI. |
+| **Provider ABC** | `app/providers.py` | Abstract base class `LLMProvider` and deterministic `MockProvider` for test isolation. |
+
+---
 
 ## Fact and Evidence Model
 
-Each extracted fact is a structured assertion with the following fields:
+Facts are structured, verifiable units of knowledge rather than unstructured text chunks:
 
-| Field | Description |
-|---|---|
-| `subject` | Entity or topic the fact is about (e.g. "India real GDP growth", "Delhivery revenue from operations") |
-| `predicate` | What is being asserted (e.g. "growth rate", "revenue", "board status") |
-| `value` | The asserted value — numeric (`float`) or categorical (`str`) |
-| `unit` | Unit of measurement (`%`, `INR million`, `₹ crore`, etc.) or `None` for categorical facts |
-| `period` | Reporting period (`FY2024`, `2024-25`, `Q4 FY24`) |
-| `as_of` | Effective or reporting date when it differs from the period (e.g. director resignation date) |
-| `scope` | Reporting basis (`standalone`, `consolidated`, `segment`) |
-| `qualifiers` | Additional context (`First Advance Estimate`, `forecast`, `provisional`) |
-| `evidence` | Source grounding: `document_id`, `page_number`, verbatim `text`, `document_name` |
-| `canonical_subject` | Normalized subject (populated during normalization) |
-| `canonical_predicate` | Normalized predicate (populated during normalization) |
-| `normalized_value` | Converted numeric value in standard units |
-| `normalized_unit` | Standard unit after conversion |
-| `normalized_period` | Standardized period string |
-| `period_type` | Classification: `fiscal_year`, `quarter`, `date`, `as_of`, `unknown` |
-
-The `value` field intentionally supports both numeric and categorical types. A fact like "Suvir Suren Sujan ceased to be a Director" has a categorical value, while "Real GDP grew by 6.5%" has a numeric value. Both are grounded assertions that can be compared across documents.
-
-## Relationship Reasoning
-
-The system classifies each cross-document fact pair into one of five labels:
-
-| Label | Meaning |
-|---|---|
-| **CORROBORATES** | Both assertions independently support the same underlying fact in compatible context |
-| **CONTRADICTS** | Assertions address the same fact in compatible context but make conflicting claims about a realized outcome |
-| **RECONCILABLE** | Apparent difference is explained by a meaningful contextual distinction (scope, vintage, date, units, definitions) |
-| **UNRELATED** | Assertions concern different entities or incompatible metrics |
-| **UNCERTAIN** | Same subject, but insufficient evidence or ambiguous context to decide reliably |
-
-### Critical Epistemic Rules
-
-The reasoner enforces rules that prevent naive numeric comparison:
-
-1. A numerical **difference** is not automatically a contradiction. Reporting scope, data vintage, or unit conversion can explain it.
-2. A numerical **match** is not automatically corroboration. Two sources might arrive at the same number through different methodologies or for different sub-periods.
-3. Different **forecasts** from different institutions (e.g. RBI 6.5% vs IMF 6.6%) are not contradictions. They reflect different modeling assumptions about future outcomes.
-4. Apparent differences **explained by context** (standalone vs consolidated, First vs Second Advance Estimate, different as-of dates) are classified as RECONCILABLE with the explaining dimension stated.
-5. Ambiguous evidence (e.g. table column headers detached from data) results in UNCERTAIN rather than a forced judgment.
-
-## Demonstration Cases
-
-The starter datasets provide two groups of documents for demonstration:
-
-### India Macroeconomy Dataset
-
-Three institutional reports with overlapping facts about the Indian economy:
-
-| Document | Source |
-|---|---|
-| `01-india-economic-survey-2024-25-excerpt.pdf` | Government of India Economic Survey |
-| `02-rbi-annual-report-2024-25-excerpt.pdf` | Reserve Bank of India |
-| `03-imf-india-2025-article-iv-excerpt.pdf` | IMF Article IV Consultation |
-
-**Case 1 — GDP Estimate Vintage Reconciliation (Economic Survey vs IMF) — VERIFIED LIVE:**
-
-The Economic Survey reports India's real GDP growth at 6.4% (First Advance Estimate) while the IMF reports 6.5% for the same period. The system classifies this as **RECONCILABLE** — the numerical difference is explained by data vintage (First Advance Estimate vs finalized figure), not a genuine factual conflict. The reasoner identifies the estimate-vintage qualifier and produces the explanation: *"Both figures refer to the same period, but represent different estimate vintages."*
-
-**Case 2 — CPI Potential Conflict:** CPI inflation figures of 4.6% vs 4.4% appear across sources. The RBI figure is an actualized historical value while the IMF figure appears in its projection block. The system treats this as a potential conflict requiring contextual and vintage interpretation, not as an established contradiction.
-
-The following cases represent the reasoning scenarios covered by the implementation and tests; the current offline starter-data run demonstrates the cases explicitly marked as verified live.
-
-### Delhivery Corporate Dataset
-
-Three disclosure formats for the same logistics company:
-
-| Document | Source |
-|---|---|
-| `01-delhivery-prospectus-2022-excerpt.pdf` | IPO Prospectus (2022) |
-| `02-delhivery-annual-report-fy24-excerpt.pdf` | Annual Report FY24 |
-| `03-delhivery-q4-fy24-earnings-presentation.pdf` | Q4 FY24 Earnings Presentation |
-
-**Case 3 — Scope Distinction (Standalone vs Consolidated):** Revenue figures differ between standalone (₹74,540.82 million) and consolidated (₹81,415.38 million) reporting bases. The system classifies this as RECONCILABLE — the scope distinction explains the numerical difference.
-
-**Case 4 — Director Temporal Reconciliation:** Director appointment/resignation timelines reference different as-of dates across the prospectus and annual report. The system classifies these as RECONCILABLE — the facts are consistent when the effective dates are considered.
-
-**Case 5 — Rounding/Unit Normalization:** Revenue expressed as ₹8,142 crore in one source and ₹81,415.38 million in another. After unit conversion to INR million, these match. The system classifies this as CORROBORATES.
-
-**Case 6 — Ambiguous Table Extraction:** Some table data has detached headers or ambiguous period associations. The system classifies these as UNCERTAIN rather than forcing a relationship judgment.
-
-## Setup
-
-```bash
-git clone <repository-url>
-cd fact-knowledge-layer
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run tests
-python -m pytest tests/ -q
+```python
+class Fact(BaseModel):
+    id: str                         # Unique identifier
+    subject: str                    # Entity or topic (e.g. "India real GDP growth")
+    predicate: str                  # Metric asserted (e.g. "growth rate", "revenue", "board status")
+    value: Union[float, str]        # Quantitative (6.5) or categorical ("resigned from the Board")
+    unit: Optional[str]             # Standardized unit (%, INR million, ₹ crore)
+    period: Optional[str]           # Fiscal year or quarter (FY2024, 2024-25, Q4 FY24)
+    as_of: Optional[str]            # Effective date for events (e.g. "August 24, 2023")
+    scope: Optional[str]            # Reporting basis ("standalone", "consolidated")
+    qualifiers: List[str]           # Context modifiers ("First Advance Estimate", "forecast")
+    evidence: Evidence              # Source grounding: document_id, page_number, verbatim source sentence
+    canonical_subject: str          # Normalized entity name
+    canonical_predicate: str        # Normalized metric category
+    normalized_value: float         # Converted value in baseline units
+    normalized_unit: str            # Baseline unit
+    normalized_period: str          # Standardized period string
 ```
 
-### Dependencies
+### Relationship Categories & Epistemic Rules
 
-- `fastapi` — Web framework
-- `uvicorn` — ASGI server
-- `python-multipart` — File upload support
-- `pydantic` — Data validation and schemas
-- `pymupdf` — PDF parsing
-- `pytest` — Test framework
-- `httpx` — HTTP client (for API testing)
-- `anthropic` — Optional: live Claude API integration (not required for offline mode)
+Cross-document fact pairs are evaluated across all dimensions and assigned one of five relationships:
 
-## Run the Application
-
-```bash
-# Start the server
-uvicorn app.main:app --host 127.0.0.1 --port 8000
-
-# Open in browser
-open http://127.0.0.1:8000/ui
-```
-
-The application works without any API key. In offline mode, it uses deterministic heuristic extraction and reasoning.
-
-## API
-
-| Endpoint | Method | Description |
+| Relationship | Definition | Example |
 |---|---|---|
-| `/health` | GET | System status, database stats, reasoning mode |
-| `/upload` | POST | Upload one or more PDFs for processing |
-| `/documents` | GET | List all ingested documents |
-| `/documents/{id}` | GET | Document details with page metadata |
-| `/facts` | GET | List extracted facts (supports `search`, `document_id`, `limit`, `offset` filters) |
-| `/facts/{id}` | GET | Single fact with full evidence and relationships |
-| `/relationships` | GET | Cross-document relationships (supports `relationship`, `fact_id`, `document_id` filters) |
-| `/stats` | GET | Aggregate statistics |
-| `/` | GET | Fact Explorer UI |
-| `/ui` | GET | Fact Explorer UI (alias) |
+| **CORROBORATES** | Independent sources assert identical metrics for the same entity, period, and scope. | Two independent reports confirming the same executive resignation date. |
+| **RECONCILABLE** | Apparent numeric or textual difference explained by contextual variance (vintage, scope, date). | 6.4% First Advance Estimate vs. 6.5% updated actual for same FY. |
+| **CONTRADICTS** | Same entity, metric, period, and scope with mutually incompatible claims about a realized outcome. | Contradicting reported historical figures without reconciling context. |
+| **UNCERTAIN** | Related topics, but missing context, ambiguous period, or detached table layout prevents safe judgment. | Standalone vs. consolidated revenues when reporting scope cannot be verified. |
+| **UNRELATED** | Different entities or non-comparable metrics sharing superficial terminology. | Revenue of Company A vs. GDP of Country B. |
 
-### Upload Example
+**Guiding Epistemic Principles:**
+1. *A numerical difference is not automatically a contradiction.* Vintage, reporting scope, or accounting standards often reconcile differences.
+2. *A numerical match is not automatically corroboration.* Matching numbers across different sub-periods or scopes are coincidental, not confirmatory.
+3. *Forecasts are not facts.* Divergent projections from different institutions reflect model variance, not real-world contradictions.
+4. *Grounding is non-negotiable.* An assertion without document, page, and exact source text is discarded.
+
+---
+
+## Starter Datasets & Demo Loader
+
+The repository ships with two multi-source document packages in `starter-datasets/`:
+1. **India Macroeconomy:** Official economic publications covering national accounts and GDP growth:
+   - `01-india-economic-survey-2024-25-excerpt.pdf` (Government of India)
+   - `02-rbi-annual-report-2024-25-excerpt.pdf` (Reserve Bank of India)
+   - `03-imf-india-2025-article-iv-excerpt.pdf` (International Monetary Fund)
+2. **Delhivery Corporate Disclosures:** Multi-format disclosures from an Indian logistics company:
+   - `01-delhivery-prospectus-2022-excerpt.pdf` (IPO Prospectus)
+   - `02-delhivery-annual-report-fy24-excerpt.pdf` (Annual Report FY24)
+   - `03-delhivery-q4-fy24-earnings-presentation.pdf` (Quarterly Earnings)
+
+### The Demo Loader (`scripts/load_starter_demo.py`)
+
+To ensure a seamless evaluation experience, `load_starter_demo.py` automates ingestion:
+- Locates both dataset directories and discovers all 6 PDFs.
+- Resets a dedicated SQLite database at `data/demo.db` (leaving the default `data/fact_layer.db` clean).
+- Calls the identical `process_document_pipeline` used by the production `/upload` endpoint (no mocked ingestion or hand-seeded facts).
+- Outputs live summary counts and exits non-zero if any error occurs.
+
+---
+
+## Example Reasoning Cases
+
+The Fact Explorer UI includes an **Example Reasoning Cases** tab displaying worked cross-document scenarios with transparent status labeling:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Status: VERIFIED LIVE                                                  │
+│ Case 3a: Estimate Vintage Reconciliation (Economic Survey vs IMF)      │
+├────────────────────────────────────────────────────────────────────────┤
+│ Fact A: India real GDP growth | 6.5 per cent | FY2024/25               │
+│         Source: 03-imf-india-2025-article-iv-excerpt.pdf (p.10)        │
+│         Evidence: "s real GDP grew by 6.5 percent in FY2024/25"        │
+│                                                                        │
+│ Fact B: India real GDP growth | 6.4 per cent | FY25                    │
+│         Source: 01-india-economic-survey-2024-25-excerpt.pdf (p.4)     │
+│         Evidence: "real GDP is estimated to grow by 6.4 per cent..."   │
+│                                                                        │
+│ Result: RECONCILABLE (Confidence: 95%)                                 │
+│ Reason: Both figures refer to the same period, but represent different │
+│         estimate vintages: standard (6.5%) versus First Advance        │
+│         Estimate, estimated (6.4%).                                    │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Case Status Breakdown
+
+| Case | Scenario | Current Runtime Status | Notes |
+|---|---|---|---|
+| **Case 3a** | GDP Vintage Reconciliation | `VERIFIED LIVE` | Economic Survey 6.4% (First Advance Estimate) vs. IMF 6.5% reconciled by vintage qualifier. Pulled directly from database. |
+| **Case 1** | GDP Growth Corroboration | `REGRESSION SCENARIO` | Covered by unit tests in `test_gate3.py` & `test_gate4.py`. In this clean run, GDP figures differ by vintage (reconciled in Case 3a). |
+| **Case 2** | CPI Inflation Investigation | `REGRESSION SCENARIO` | Covered by `test_case_2_cpi_inflation_candidate_investigation` in `test_gate4.py`. The heuristic regex set does not extract CPI tables from the current excerpts. |
+| **Case 3b** | Director Temporal Reconciliation | `KNOWN LIMITATION` | Covered by `test_gate4.py` Case D. The clean run is currently affected by Defect A & Defect B (documented below); director events currently pair as duplicates or contradictions. |
+| **Case 4** | Scope Distinction (Standalone vs Consolidated) | `KNOWN LIMITATION` | Covered by `test_gate4.py` Case C. The broad revenue pattern currently leaves `scope=None`, classifying the pair as `UNCERTAIN` (Limitation L1). |
+
+---
+
+## API Reference
+
+The FastAPI service exposes 10 REST endpoints:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | System status, reasoning mode, and aggregate database counts. |
+| `POST` | `/upload` | Multipart upload for one or more PDF files for immediate pipeline execution. |
+| `GET` | `/documents` | List all ingested documents with page counts and candidate ratios. |
+| `GET` | `/documents/{id}` | Detailed page-by-page metadata and scoring breakdown for a document. |
+| `GET` | `/facts` | Query extracted facts with filters (`search`, `document_id`, `limit`, `offset`). |
+| `GET` | `/facts/{id}` | Single fact detail including verbatim evidence and all linked relationships. |
+| `GET` | `/relationships` | Query comparisons with filters (`relationship`, `fact_id`, `document_id`). |
+| `GET` | `/stats` | System summary statistics and relationship distribution breakdown. |
+| `GET` | `/` | Responsive Fact Explorer single-page UI. |
+| `GET` | `/ui` | Alias redirect to Fact Explorer UI. |
+
+### Upload Example (cURL)
 
 ```bash
 curl -X POST http://127.0.0.1:8000/upload \
   -F "files=@starter-datasets/delhivery/01-delhivery-prospectus-2022-excerpt.pdf"
 ```
 
-## UI
+---
 
-The Fact Explorer is a single-page application built with plain HTML, CSS, and JavaScript (no frameworks, no build step).
+## Fact Explorer UI
 
-**Tabs:**
+The embedded UI is implemented without frontend frameworks or external CDNs:
+- **Fact Explorer Tab:** Real-time search across entities, metrics, and evidence snippets. Modal view reveals normalized values, fiscal periods, and cross-document links.
+- **Cross-Document Relationships Tab:** Filter relationships by category (`CORROBORATES`, `RECONCILABLE`, `CONTRADICTS`, `UNCERTAIN`). Inspect side-by-side fact cards with dimension chips (`same` vs `different`) and reasoning rationale.
+- **Example Reasoning Cases Tab:** Live demonstration cases with verified status indicators.
+- **Upload & Ingest Tab:** Drag-and-drop PDF ingestion with immediate client feedback.
+- **Documents Tab:** Ingested document catalog with candidate page ratios and processing latencies.
 
-- **Fact Explorer** — Search and browse all extracted facts with evidence previews. Click any fact card for a detailed modal showing canonical forms, normalized values, source evidence, and all cross-document relationships.
-- **Cross-Document Relationships** — Browse all relationship pairs with filter buttons for CORROBORATES, RECONCILABLE, CONTRADICTS, and UNCERTAIN. Each card shows both facts side-by-side with dimension chips, source documents, and the reasoning rationale.
-- **Demonstration Cases** — Inspect the assignment's reasoning scenarios with transparent dimension differences, evidence, and decision rationales.
-- **Upload & Ingest** — Upload arbitrary PDFs through the browser. Processing happens server-side with progress feedback.
-- **Documents** — Table view of all ingested documents with page counts, candidate rates, fact counts, and processing times.
+---
 
-The header displays the reasoning mode badge (Offline / Heuristic Mode) and aggregate statistics.
+## Testing & Quality Gates
 
-## Reasoning Modes
+The test suite enforces five progressive quality gates plus end-to-end integration:
 
-### Offline Heuristic Mode (Default)
-
-Works without any API key. Uses:
-- Deterministic regex patterns for fact extraction from financial text
-- Rule-based relationship classification using dimension diffs (period, scope, qualifiers, units, values)
-- Estimate-vintage detection for reconciling different advance/provisional/preliminary figures
-- Threshold-based confidence scoring
-
-This mode supports the current assignment demonstration and has been validated against the provided starter datasets.
-
-### Provider Abstraction
-
-The `LLMProvider` abstract base class defines interfaces for LLM-based fact extraction and relationship reasoning. `MockProvider` returns deterministic fixtures for testing. The `LLMProvider` abstraction is designed to support a production LLM provider in the future. The submitted runtime currently uses the deterministic offline implementation; no external LLM provider is required.
-
-## Testing
-
-```
-198 tests passed, 0 failed
+```bash
+python -m pytest tests/ -q
 ```
 
-Tests cover all five gates:
+```
+===================== 198 passed, 7 warnings in ~32s =====================
+```
 
-| Test File | Count | Coverage |
+| Test File | Count | Coverage Focus |
 |---|---|---|
-| `test_gate1.py` | 20 | PDF parsing, page scoring, candidate prioritization |
-| `test_gate2.py` | 46 | Fact extraction, schema validation, parsing edge cases |
-| `test_gate3.py` | 55 | Normalization, canonicalization, unit conversion, matching |
-| `test_gate4.py` | 37 | Relationship reasoning, heuristic classifier, provider fallback |
-| `test_gate5.py` | 12 | API endpoints, UI, file upload, persistence |
-| `test_pipeline_integration.py` | 28 | End-to-end pipeline, database round-trips, serialization |
-| `test_table_regression.py` | — | Table extraction regression fixtures |
+| `tests/test_gate1.py` | 20 | PDF text parsing, table detection heuristics, candidate page prioritization scoring. |
+| `tests/test_gate2.py` | 46 | Structured fact schema validation, evidence grounding, regex pattern edge cases. |
+| `tests/test_gate3.py` | 55 | Entity/predicate canonicalization, unit conversion (crore/million/lakh), period alignment. |
+| `tests/test_gate4.py` | 37 | Epistemic relationship classification, confidence scoring, heuristic rule validation. |
+| `tests/test_gate5.py` | 12 | FastAPI endpoints, health checks, persistence operations, UI serving. |
+| `tests/test_pipeline_integration.py` | 28 | End-to-end multi-document pipeline runs, database round-trips, serialization. |
+| `tests/test_table_regression.py` | — | Multi-column table layout regression fixtures. |
 
-The full suite is verified in a fresh virtual environment from `requirements.txt`.
+---
 
 ## Design Decisions and Trade-offs
 
-**SQLite instead of a graph database.** The assignment prefers a small prototype. SQLite provides zero-config persistence and relational querying without external dependencies. The data model is inherently relational (facts link to documents, comparisons link to facts), so a graph database adds complexity without proportional benefit at this scale.
+- **SQLite over Graph/Vector DBs:** The problem domain requires relational joins between facts, evidence, and comparisons. SQLite provides zero-configuration, thread-safe, ACID-compliant persistence without requiring background daemon processes or external infrastructure.
+- **Deterministic Candidate Prioritization:** Running complete PDF text through language models is computationally expensive and slow. The pipeline scores pages by financial keyword density, table occurrences, and numerical frequency, focusing extraction on the top candidate pages.
+- **Verbatim Evidence Linking:** Every fact retains an exact sentence slice from the source text. This provides human auditability and prevents ungrounded hallucinations.
+- **Provider Abstraction with Offline Fallback:** An abstract `LLMProvider` interface decouples the core logic from specific model providers. The application defaults to deterministic offline heuristics so it can be evaluated reliably without API keys.
+- **Single-File Zero-Build UI:** Keeping the frontend in vanilla HTML/CSS/JavaScript within the repository avoids Node.js dependencies, build steps, or bundle tooling.
 
-**Deterministic candidate prioritization.** Rather than sending every page to an LLM (expensive, slow, rate-limited), the system scores pages by financial keyword density, numeric content, table presence, and heading structure. This selects the most information-rich pages for extraction, reducing downstream cost.
+---
 
-**Structured facts with evidence.** Every fact carries verbatim source text, document ID, and page number. This makes the system auditable — any extracted assertion can be traced back to its exact source sentence. The evidence trail is not optional metadata; it is a core design requirement.
+## Known Limitations and Defects
 
-**Provider abstraction.** The `LLMProvider` ABC separates extraction and reasoning logic from any specific provider. `MockProvider` returns deterministic fixtures for testing. The submitted runtime uses the deterministic offline implementation; the abstraction is an extension point for future LLM-backed extraction.
+In the spirit of complete engineering honesty, the following known gaps are documented:
 
-**Plain HTML/JS UI.** We chose vanilla HTML, CSS, and JavaScript to avoid frontend build complexity. The embedded single-page application uses fetch calls to the API. No build step, no node_modules, no framework overhead.
+1. **Defect A — Duplicate Fact Extraction (Annual Report p.40 & p.43):**
+   The same director cessation sentence appears on multiple pages of the Delhivery Annual Report. The extractor currently produces distinct Fact objects for each occurrence, leading the reasoner to pair them as `CORROBORATES` across different pages of the same document. A post-extraction deduplication filter is planned for Week 2.
+2. **Defect B — Resigned vs. Ceased Classification:**
+   "Resigned from the Board" (p.33) and "ceased to be a Director" (p.40) refer to the same individual departing on the same date. The heuristic reasoner currently classifies this as `CONTRADICTS` due to literal string mismatch in categorical values. Week 2 will introduce synonym resolution for corporate governance actions.
+3. **Limitation L1 — Standalone vs. Consolidated Scope in Broad Revenue Matches:**
+   The primary revenue regex captures reporting basis (`standalone` / `consolidated`). However, fallback broad revenue patterns capture figures with `scope=None`. In the clean starter run, the standalone and consolidated revenue figures both have `scope=None`, resulting in an `UNCERTAIN` classification rather than `RECONCILABLE` by scope.
+4. **Table Layout Detachment:**
+   Complex financial tables with multi-tier column headers can detach from numerical cells during raw PyMuPDF text extraction.
 
-## Limitations
+---
 
-- **Heuristic extraction coverage.** The regex-based extractor handles common financial sentence patterns (GDP growth, revenue figures, director events) but does not cover all possible fact formats. Unsupported wording or table layouts may result in `UNCERTAIN` or no extracted fact. An LLM-backed extractor would handle arbitrary document layouts.
-- **Table layout ambiguity.** PyMuPDF's table detection does not always associate column headers with data cells correctly. This can result in UNCERTAIN classifications for table-extracted facts.
-- **Offline reasoning semantic depth.** The heuristic reasoner uses dimension diffs and rule thresholds. It cannot match the nuanced contextual reasoning of a live LLM, particularly for complex multi-dimensional comparisons.
-- **Prototype-scale persistence.** SQLite is suitable for demonstration but would need migration to a production database (PostgreSQL, etc.) for concurrent multi-user workloads.
+## Evaluation & Baseline
 
-## AI Tools Used
+A formal baseline audit was established before polish work commenced. Full artifacts are archived in `docs/validation/`:
+- [`docs/validation/BASELINE.md`](docs/validation/BASELINE.md): Detailed audit log, module inventory, grep records, and defect analyses.
+- [`docs/validation/baseline_facts.json`](docs/validation/baseline_facts.json): The 13 grounded facts extracted from the 6 starter PDFs.
+- [`docs/validation/baseline_relationships.json`](docs/validation/baseline_relationships.json): The 9 relationships produced by the offline reasoning engine.
+- [`docs/validation/baseline_metrics.json`](docs/validation/baseline_metrics.json): Processing latencies and candidate page rates.
 
-Development was assisted by:
+### Clean Ingest Summary
 
-- **MiMo (mimo-v2.5-free)** — Primary implementation agent for Gates 0–2 and test infrastructure. Wrote regression tests, pipeline integration tests, and the initial README draft. Performed post-change verification passes and surgical bug fixes.
-- **Copilot** — Code review and suggestion support throughout development.
-- **Gemini 3.8 Flash High** — Implemented and reviewed substantial Gate 3–5 work including fact normalization, candidate matching, relationship reasoning, the heuristic classifier, provider abstraction, SQLite persistence, FastAPI endpoints, and the Fact Explorer UI. Performed independent review of normalization logic, matching heuristics, and reasoner prompt design.
+| Metric | Clean Starter Run | Prior Claim (Stale Runbook) |
+|---|---|---|
+| Ingested Documents | **6** | 6 |
+| Pages Parsed | **511** | 511 |
+| Extracted Facts | **13** | 47 |
+| Relationships | **9** | 100 |
+| Total Ingestion Time | **~29 s** | ~35 s |
 
-All AI-assisted code was reviewed, tested, and validated before commits. The author is responsible for design decisions, architecture, and correctness claims.
+*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 13 verified facts and 9 grounded relationships.)*
+
+---
 
 ## Future Work
 
-- LLM-backed extraction for arbitrary document layouts
-- Full-text search with embeddings for semantic fact retrieval (not part of current implementation)
-- Temporal versioning of facts (track how a metric changes across report releases)
-- Multi-page fact extraction (facts spanning table continuations)
-- Incremental re-ingestion (update knowledge base when new documents arrive)
-- Production authentication and authorization
-- Export to standard formats (JSON-LD, CSV)
+- **Week 2 Evaluation Suite:** Implement `evaluate.py` with an annotated gold standard dataset for quantitative precision/recall tracking across all relationship labels.
+- **Deduplication Engine:** Group facts by normalized entity, predicate, period, and source document before candidate pairing to eliminate Defect A.
+- **Semantic Synonym Dictionary:** Map governance terms (`resigned`, `ceased to be`, `stepped down`) to canonical states to resolve Defect B.
+- **Concrete LLM Provider:** Wire a tested, provider-neutral client (Anthropic Claude, MiMo, or local Ollama) into `LLMProvider` for generalized table extraction.
+
+---
+
+## AI Tools Used
+
+In accordance with transparent engineering disclosure, development of this project was assisted by:
+
+- **MiMo (`mimo-v2.5-free`):** Primary agent for initial Gates 0–2 scaffolding, PyMuPDF candidate scoring routines, and core unit test suites.
+- **GitHub Copilot:** Code completion and docstring typing assistance throughout development.
+- **Gemini 3.8 Flash High:** Architecture review, implementation of Gate 3–5 normalization, candidate matching, epistemic relationship reasoning heuristics, SQLite persistence, FastAPI routes, zero-build UI, baseline audit verification, and repository polish.
+
+All architectural decisions, epistemic rules, test validations, and factual claims were verified and tested directly in local execution.

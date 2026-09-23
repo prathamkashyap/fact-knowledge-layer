@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from app.models import Fact, Evidence, FactComparison, PreparedComparison
 from app.pdf_parser import parse_pdf_document, PageObject, DocumentIngestionResult
 from app.providers import LLMProvider
-from app.normalizer import normalize_facts, normalize_fact
+from app.normalizer import normalize_facts, normalize_fact, dedupe_facts
 from app.matcher import generate_candidate_pairs
 from app.reasoner import reason_all_comparisons
 from app.database import Database
@@ -338,6 +338,9 @@ def process_document_pipeline(
     doc_result = parse_pdf_document(pdf_path)
     new_facts = extract_facts_from_pages(provider, doc_result.pages, candidate_only=True)
     normalized_new_facts = normalize_facts(new_facts, context=doc_result.filename)
+    # Fold duplicate extraction candidates (same doc, same claim, any page)
+    # under one canonical fact before persistence — see dedupe_facts().
+    normalized_new_facts = dedupe_facts(normalized_new_facts)
 
     comparisons: List[FactComparison] = []
 

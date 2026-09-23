@@ -126,8 +126,10 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
         stats = db.get_stats()
         assert stats["total_documents"] == 6
         assert stats["total_pages"] == 511
-        assert stats["total_facts"] == 13
-        assert stats["total_relationships"] == 9
+        # Post-dedup baseline (Defect A fixed): 13 raw rows collapse to 8
+        # unique claims; relationship cross-products collapse to 3 pairs.
+        assert stats["total_facts"] == 8
+        assert stats["total_relationships"] == 3
 
         # Ensure documents > 0 and facts > 0 per acceptance criteria
         assert stats["total_documents"] > 0
@@ -135,7 +137,7 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
 
         # Facts must have non-empty grounded evidence
         facts = db.get_facts(limit=100)
-        assert len(facts) == 13
+        assert len(facts) == 8
         for f in facts:
             assert f.evidence.text
             assert f.evidence.document_name
@@ -143,7 +145,7 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
 
         # Relationships must contain the verified live RECONCILABLE vintage case
         rels = db.get_relationships(limit=100)
-        assert len(rels) == 9
+        assert len(rels) == 3
         reconcilable = [r for r in rels if r["relationship"] == "RECONCILABLE"]
         assert len(reconcilable) == 1
         assert "vintage" in reconcilable[0]["reason"].lower()

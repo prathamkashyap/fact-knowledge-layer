@@ -476,3 +476,60 @@ def normalize_fact(fact: Fact, context: Optional[str] = None) -> Fact:
 def normalize_facts(facts: List[Fact], context: Optional[str] = None) -> List[Fact]:
     """Normalize a collection of Fact objects."""
     return [normalize_fact(f, context=context) for f in facts]
+
+
+# ---------------------------------------------------------------------------
+# Duplicate-grouping (Defect A)
+# ---------------------------------------------------------------------------
+
+def fact_fingerprint(f: Fact) -> Tuple[str, ...]:
+    """Identity key for duplicate detection.
+
+    Covers document + canonical/normalized subject, predicate, value, unit,
+    period + as_of + scope. Evidence page is deliberately NOT part of the
+    key: the same sentence repeated across tables/pages of one document is
+    exactly the duplicate pattern Defect A produces. Different documents
+    never share a fingerprint (page-level repetition in two sources is a
+    genuine cross-source pair, not a duplicate).
+    """
+    value = f.normalized_value if f.normalized_value is not None else f.value
+    if isinstance(value, float) and value.is_integer():
+        value_str = str(int(value))
+    else:
+        value_str = str(value)
+    return (
+        (f.evidence.document_name or f.evidence.document_id or "").strip().casefold(),
+        (f.canonical_subject if f.canonical_subject is not None else f.subject or "").strip().casefold(),
+        (f.canonical_predicate if f.canonical_predicate is not None else f.predicate or "").strip().casefold(),
+        value_str.strip().casefold(),
+        (f.normalized_unit if f.normalized_unit is not None else f.unit or "").strip().casefold(),
+        (f.normalized_period if f.normalized_period is not None else f.period or "").strip().casefold(),
+        (f.as_of or "").strip().casefold(),
+        (f.scope or "").strip().casefold(),
+    )
+
+
+def dedupe_facts(facts: List[Fact]) -> List[Fact]:
+    """Group duplicate extraction candidates under one canonical fact.
+
+    The first occurrence of a fingerprint becomes the canonical fact.
+    Later occurrences are folded into that fact's ``qualifiers`` as
+    ``duplicate-evidence: p.<page>`` provenance entries, so nothing is
+    discarded silently and no schema change is required. Provenance
+    strings are page references only — deliberately free of reasoner
+    trigger keywords (vintage/forecast) so they cannot distort
+    relationship classification.
+    """
+    by_fingerprint: Dict[Tuple[str, ...], Fact] = {}
+    canonical_facts: List[Fact] = []
+    for f in facts:
+        key = fact_fingerprint(f)
+        canonical = by_fingerprint.get(key)
+        if canonical is None:
+            by_fingerprint[key] = f
+            canonical_facts.append(f)
+            continue
+        provenance = f"duplicate-evidence: p.{f.evidence.page_number}"
+        if provenance not in canonical.qualifiers:
+            canonical.qualifiers.append(provenance)
+    return canonical_facts

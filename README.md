@@ -299,6 +299,10 @@ Week 2 added a quantitative harness with hand-verified gold sets:
 - [`docs/evaluation/extraction_gold.json`](docs/evaluation/extraction_gold.json): 21 hand-verified gold claims (8 current-pipeline + 13 deliberate recall misses).
 - [`docs/evaluation/relationship_gold.json`](docs/evaluation/relationship_gold.json): 9 source-verified pair expectations (3 label-expectation + 6 must-stay-absent).
 
+**Baseline relationship composition (Week 1 archive, 9 rows):** of the 9 baseline relationship rows, all 3 `CONTRADICTS` were artifacts (Defect B, **0 genuine**); 4 `CORROBORATES` rows were same-document duplicate-extraction artifacts (Defect A); the GDP estimate-vintage `RECONCILABLE` was the genuine correct classification; and the revenue `UNCERTAIN` (missing scope context) became `RECONCILABLE` after Week 2 scope/context capture.
+
+**Gold-set scope note:** the relationship gold set contains 9 source-verifiable expectations for the current corpus; expanding it beyond this (e.g. toward a 20–30 quantity target) requires additional cross-document source material rather than synthetic cases — padding with unverifiable entries would weaken the evaluation.
+
 ### Before / After (Week 2)
 
 | Metric | Pre-fix baseline | Post-Week-2 |

@@ -767,12 +767,12 @@ HTML_UI = """<!DOCTYPE html>
                 notLiveNote: 'Covered by the test suite. Run python scripts/load_starter_demo.py to populate the live verified relationship.'
             },
             director_reconcile: {
-                notLiveStatus: 'KNOWN LIMITATION',
-                notLiveNote: 'Documented limitation: the clean starter run is affected by two recorded defects — duplicate fact extraction from a single source sentence, and "resigned" vs "ceased to be a Director" being classified CONTRADICTS rather than reconciled. Director pairs therefore do not surface as a clean RECONCILABLE temporal match in this run. Deferred to follow-up dedup work.'
+                notLiveStatus: 'REGRESSION SCENARIO',
+                notLiveNote: 'Covered by the named tests in tests/test_status_reasoning.py (resigned vs ceased on the same effective date is RECONCILABLE). Run python scripts/load_starter_demo.py to populate the live verified relationship.'
             },
             scope_failure: {
-                notLiveStatus: 'KNOWN LIMITATION',
-                notLiveNote: 'Documented limitation: the offline extractor does not capture the standalone/consolidated reporting basis on these broad revenue matches (scope=None), so the two Delhivery revenue figures are classified UNCERTAIN rather than RECONCILABLE by scope. The intended scope distinction is covered by unit tests in test_gate4.py.'
+                notLiveStatus: 'REGRESSION SCENARIO',
+                notLiveNote: 'Covered by the named tests in tests/test_scope_extraction.py (standalone/consolidated basis and fiscal year are captured from the matched sentence, so the pair is RECONCILABLE by scope). Run python scripts/load_starter_demo.py to populate the live verified relationship.'
             }
         };
 

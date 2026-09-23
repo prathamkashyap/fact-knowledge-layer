@@ -337,6 +337,45 @@ def extract_facts_from_pages(
     return all_facts
 
 
+def normalize_evidence_text(text: Optional[str]) -> str:
+    """Collapse all whitespace runs to a single space for containment checks."""
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def verify_evidence_on_page(evidence_text: Optional[str], page_text: Optional[str]) -> bool:
+    """
+    True when the evidence string appears verbatim (whitespace-insensitive)
+    on the cited page. Extraction builds evidence from the page's own text
+    with lines rejoined by single spaces, so any mismatch indicates a
+    page-offset or evidence-assembly bug, not a content difference.
+    """
+    ev = normalize_evidence_text(evidence_text)
+    page = normalize_evidence_text(page_text)
+    if not ev or not page:
+        return False
+    return ev in page
+
+
+def validate_fact_evidence(
+    facts: List[Fact],
+    pages_by_number: Dict[int, str],
+) -> tuple[List[Fact], List[Fact]]:
+    """
+    Split facts into (verified, rejected) by checking each fact's evidence
+    string against the raw text of its cited page. Facts citing a page that
+    does not exist in the document are rejected (page-offset bug).
+    """
+    verified: List[Fact] = []
+    rejected: List[Fact] = []
+    for fact in facts:
+        page_text = pages_by_number.get(fact.evidence.page_number, "")
+        if verify_evidence_on_page(fact.evidence.text, page_text):
+            verified.append(fact)
+        else:
+            rejected.append(fact)
+    return verified, rejected
+
+
 def process_document_pipeline(
     pdf_path: str,
     provider: Optional[LLMProvider] = None,
@@ -354,6 +393,14 @@ def process_document_pipeline(
     # Fold duplicate extraction candidates (same doc, same claim, any page)
     # under one canonical fact before persistence — see dedupe_facts().
     normalized_new_facts = dedupe_facts(normalized_new_facts)
+    # Ground every fact in the raw text of its cited page before persistence.
+    # Rejects evidence that is absent from the cited page (page-offset or
+    # evidence-assembly bugs); heuristic-path evidence always verifies
+    # because it is a slice of that page's own text.
+    pages_by_number = {p.page_number: p.raw_text for p in doc_result.pages}
+    normalized_new_facts, rejected_facts = validate_fact_evidence(
+        normalized_new_facts, pages_by_number
+    )
 
     comparisons: List[FactComparison] = []
 
@@ -376,6 +423,7 @@ def process_document_pipeline(
         "total_pages": doc_result.total_pages,
         "candidate_pages_count": doc_result.candidate_pages_count,
         "facts_count": len(normalized_new_facts),
+        "evidence_rejected_count": len(rejected_facts),
         "comparisons_count": len(comparisons),
         "reasoning_mode": reasoning_mode,
         "processing_time_ms": doc_result.processing_time_ms,

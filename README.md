@@ -191,8 +191,8 @@ The Fact Explorer UI includes an **Example Reasoning Cases** tab displaying work
 | **Case 3a** | GDP Vintage Reconciliation | `VERIFIED LIVE` | Economic Survey 6.4% (First Advance Estimate) vs. IMF 6.5% reconciled by vintage qualifier. Pulled directly from database. |
 | **Case 1** | GDP Growth Corroboration | `REGRESSION SCENARIO` | Covered by unit tests in `test_gate3.py` & `test_gate4.py`. In this clean run, GDP figures differ by vintage (reconciled in Case 3a). |
 | **Case 2** | CPI Inflation Investigation | `REGRESSION SCENARIO` | Covered by `test_case_2_cpi_inflation_candidate_investigation` in `test_gate4.py`. The heuristic regex set does not extract CPI tables from the current excerpts. |
-| **Case 3b** | Director Temporal Reconciliation | `KNOWN LIMITATION` | Covered by `test_gate4.py` Case D. The clean run is currently affected by Defect A & Defect B (documented below); director events currently pair as duplicates or contradictions. |
-| **Case 4** | Scope Distinction (Standalone vs Consolidated) | `KNOWN LIMITATION` | Covered by `test_gate4.py` Case C. The broad revenue pattern currently leaves `scope=None`, classifying the pair as `UNCERTAIN` (Limitation L1). |
+| **Case 3b** | Director Temporal Reconciliation | `VERIFIED LIVE` | Resigned p.33 vs. ceased p.40/43 with the same effective date reconcile as RECONCILABLE (temporal progression), not CONTRADICTS — Week 2 Defect B fix. Covered by `tests/test_status_reasoning.py`. |
+| **Case 4** | Scope Distinction (Standalone vs Consolidated) | `VERIFIED LIVE` | Reporting basis and fiscal year are captured from the matched sentence; standalone vs. consolidated pair classifies RECONCILABLE by scope — Week 2 Limitation L1 fix. Covered by `tests/test_scope_extraction.py`. |
 
 ---
 
@@ -272,14 +272,17 @@ python -m pytest tests/ -q
 
 In the spirit of complete engineering honesty, the following known gaps are documented:
 
-1. **Defect A — Duplicate Fact Extraction (Annual Report p.40 & p.43):**
-   The same director cessation sentence appears on multiple pages of the Delhivery Annual Report. The extractor currently produces distinct Fact objects for each occurrence, leading the reasoner to pair them as `CORROBORATES` across different pages of the same document. A post-extraction deduplication filter is planned for Week 2.
-2. **Defect B — Resigned vs. Ceased Classification:**
-   "Resigned from the Board" (p.33) and "ceased to be a Director" (p.40) refer to the same individual departing on the same date. The heuristic reasoner currently classifies this as `CONTRADICTS` due to literal string mismatch in categorical values. Week 2 will introduce synonym resolution for corporate governance actions.
-3. **Limitation L1 — Standalone vs. Consolidated Scope in Broad Revenue Matches:**
-   The primary revenue regex captures reporting basis (`standalone` / `consolidated`). However, fallback broad revenue patterns capture figures with `scope=None`. In the clean starter run, the standalone and consolidated revenue figures both have `scope=None`, resulting in an `UNCERTAIN` classification rather than `RECONCILABLE` by scope.
-4. **Table Layout Detachment:**
+1. **Table Layout Detachment:**
    Complex financial tables with multi-tier column headers can detach from numerical cells during raw PyMuPDF text extraction.
+2. **Extraction Recall:**
+   The offline extractor is precision-first: of 21 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 8 — the remaining 13 are deliberate recall misses (e.g. comparative-period figures, table-only claims) tracked by the evaluation harness rather than pattern-guessed.
+
+### Fixed in Week 2 (for the record)
+
+- **Defect A — Duplicate Fact Extraction:** duplicate occurrences of the same claim (e.g. the same director cessation on pp. 40 and 43) are now grouped under one canonical fact by `dedupe_facts()`; suppressed occurrences are retained as `duplicate-evidence` page references. Covered by `tests/test_dedup.py`.
+- **Defect B — Resigned vs. Ceased Classification:** same-date `resigned` → `ceased` board-status progressions now classify RECONCILABLE via a bounded status-progression rule instead of falling through to CONTRADICTS. Covered by `tests/test_status_reasoning.py`.
+- **Limitation L1 — Standalone/Consolidated Scope:** the broad revenue pattern now recovers `on standalone/consolidated basis` and `FYxx` from the matched sentence, so the scope pair classifies RECONCILABLE instead of UNCERTAIN. Covered by `tests/test_scope_extraction.py`.
+- **Evidence Validation:** every fact's evidence string is verified verbatim (whitespace-insensitive) against the raw text of its cited page before persistence; ungrounded facts are rejected and counted. Covered by `tests/test_evidence_validation.py`.
 
 ---
 
@@ -287,30 +290,54 @@ In the spirit of complete engineering honesty, the following known gaps are docu
 
 A formal baseline audit was established before polish work commenced. Full artifacts are archived in `docs/validation/`:
 - [`docs/validation/BASELINE.md`](docs/validation/BASELINE.md): Detailed audit log, module inventory, grep records, and defect analyses.
-- [`docs/validation/baseline_facts.json`](docs/validation/baseline_facts.json): The 13 grounded facts extracted from the 6 starter PDFs.
-- [`docs/validation/baseline_relationships.json`](docs/validation/baseline_relationships.json): The 9 relationships produced by the offline reasoning engine.
+- [`docs/validation/baseline_facts.json`](docs/validation/baseline_facts.json): The 13 grounded facts extracted from the 6 starter PDFs (Week 1 archive, pre-dedup).
+- [`docs/validation/baseline_relationships.json`](docs/validation/baseline_relationships.json): The 9 relationships produced by the offline reasoning engine (Week 1 archive, duplicate-inflated).
 - [`docs/validation/baseline_metrics.json`](docs/validation/baseline_metrics.json): Processing latencies and candidate page rates.
+
+Week 2 added a quantitative harness with hand-verified gold sets:
+- [`scripts/evaluate.py`](scripts/evaluate.py): fresh-run evaluation over the 6-PDF corpus; writes a diffable snapshot to `docs/evaluation/results.json`.
+- [`docs/evaluation/extraction_gold.json`](docs/evaluation/extraction_gold.json): 21 hand-verified gold claims (8 current-pipeline + 13 deliberate recall misses).
+- [`docs/evaluation/relationship_gold.json`](docs/evaluation/relationship_gold.json): 9 source-verified pair expectations (3 label-expectation + 6 must-stay-absent).
+
+### Before / After (Week 2)
+
+| Metric | Pre-fix baseline | Post-Week-2 |
+|---|---|---|
+| Extraction precision | 0.6154 | **1.0000** |
+| Extraction recall | 0.3810 | 0.3810 |
+| Extraction F1 | 0.4706 | **0.5517** |
+| Period capture | 0.50 | **1.00** |
+| Scope capture | 0.00 | **1.00** |
+| Relationship accuracy | 0.5556 | **1.0000** |
+| Absent-expectation compliance | 0.6667 | **1.0000** |
+| Facts (clean run) | 13 (5 duplicate) | **8** |
+| Relationships (clean run) | 9 (duplicate-inflated) | **3** (all RECONCILABLE) |
+
+Reproduce with:
+
+```bash
+python scripts/evaluate.py            # fresh run; latest result in docs/evaluation/results.json
+```
 
 ### Clean Ingest Summary
 
-| Metric | Clean Starter Run | Prior Claim (Stale Runbook) |
+| Metric | Week 1 Baseline | Post-Week 2 |
 |---|---|---|
-| Ingested Documents | **6** | 6 |
-| Pages Parsed | **511** | 511 |
-| Extracted Facts | **13** | 47 |
-| Relationships | **9** | 100 |
-| Total Ingestion Time | **~29 s** | ~35 s |
+| Ingested Documents | **6** | **6** |
+| Pages Parsed | **511** | **511** |
+| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) |
+| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) |
+| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~35–44 s includes gold matching) |
 
-*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 13 verified facts and 9 grounded relationships.)*
+*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 8 verified facts and 3 grounded relationships; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
 
 ---
 
 ## Future Work
 
-- **Week 2 Evaluation Suite:** Implement `evaluate.py` with an annotated gold standard dataset for quantitative precision/recall tracking across all relationship labels.
-- **Deduplication Engine:** Group facts by normalized entity, predicate, period, and source document before candidate pairing to eliminate Defect A.
-- **Semantic Synonym Dictionary:** Map governance terms (`resigned`, `ceased to be`, `stepped down`) to canonical states to resolve Defect B.
-- **Concrete LLM Provider:** Wire a tested, provider-neutral client (Anthropic Claude, MiMo, or local Ollama) into `LLMProvider` for generalized table extraction.
+- **Extraction Recall:** 13 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) are tracked but not yet extracted — comparative-period figures, table-only claims, and other precision-first skips. Raise recall against the harness without regressing precision from 1.0000.
+- **Table Layout Detachment:** improve structured extraction for multi-tier financial tables (remaining known limitation above).
+- **Concrete LLM Provider:** Wire a tested, provider-neutral client (Anthropic Claude, MiMo, or local Ollama) into the existing `LLMProvider` ABC for generalized table extraction. The provider interface exists; no live provider is currently configured or enabled.
 
 ---
 

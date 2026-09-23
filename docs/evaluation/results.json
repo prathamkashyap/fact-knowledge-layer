@@ -1,0 +1,233 @@
+{
+  "latest": {
+    "label": "pre-fix-baseline",
+    "timestamp": "2026-09-23T10:25:12+00:00",
+    "source": "fresh_run",
+    "documents": 6,
+    "wall_seconds": 34.71,
+    "per_document": [
+      {
+        "dataset": "india-macroeconomy",
+        "file": "01-india-economic-survey-2024-25-excerpt.pdf",
+        "document_id": "9a696265905e",
+        "filename": "01-india-economic-survey-2024-25-excerpt.pdf",
+        "total_pages": 89,
+        "candidate_pages_count": 55,
+        "facts_count": 1,
+        "comparisons_count": 0,
+        "reasoning_mode": "heuristic",
+        "processing_time_ms": 3995.06
+      },
+      {
+        "dataset": "india-macroeconomy",
+        "file": "02-rbi-annual-report-2024-25-excerpt.pdf",
+        "document_id": "d9ef55d30a57",
+        "filename": "02-rbi-annual-report-2024-25-excerpt.pdf",
+        "total_pages": 100,
+        "candidate_pages_count": 88,
+        "facts_count": 0,
+        "comparisons_count": 0,
+        "reasoning_mode": "heuristic",
+        "processing_time_ms": 2977.02
+      },
+      {
+        "dataset": "india-macroeconomy",
+        "file": "03-imf-india-2025-article-iv-excerpt.pdf",
+        "document_id": "98c73c9e13da",
+        "filename": "03-imf-india-2025-article-iv-excerpt.pdf",
+        "total_pages": 95,
+        "candidate_pages_count": 44,
+        "facts_count": 1,
+        "comparisons_count": 1,
+        "reasoning_mode": "heuristic",
+        "processing_time_ms": 4629.38
+      },
+      {
+        "dataset": "delhivery",
+        "file": "01-delhivery-prospectus-2022-excerpt.pdf",
+        "document_id": "817b305a6e36",
+        "filename": "01-delhivery-prospectus-2022-excerpt.pdf",
+        "total_pages": 100,
+        "candidate_pages_count": 64,
+        "facts_count": 0,
+        "comparisons_count": 1,
+        "reasoning_mode": "heuristic",
+        "processing_time_ms": 2092.31
+      },
+      {
+        "dataset": "delhivery",
+        "file": "02-delhivery-annual-report-fy24-excerpt.pdf",
+        "document_id": "0dedd7093f73",
+        "filename": "02-delhivery-annual-report-fy24-excerpt.pdf",
+        "total_pages": 100,
+        "candidate_pages_count": 80,
+        "facts_count": 11,
+        "comparisons_count": 9,
+        "reasoning_mode": "heuristic",
+        "processing_time_ms": 7372.1
+      },
+      {
+        "dataset": "delhivery",
+        "file": "03-delhivery-q4-fy24-earnings-presentation.pdf",
+        "document_id": "ba87114a4766",
+        "filename": "03-delhivery-q4-fy24-earnings-presentation.pdf",
+        "total_pages": 27,
+        "candidate_pages_count": 16,
+        "facts_count": 0,
+        "comparisons_count": 9,
+        "reasoning_mode": "heuristic",
+        "processing_time_ms": 860.44
+      }
+    ],
+    "raw_counts": {
+      "documents": 6,
+      "pages": 511,
+      "facts": 13,
+      "relationships": 9,
+      "relationship_breakdown": {
+        "CONTRADICTS": 3,
+        "CORROBORATES": 4,
+        "RECONCILABLE": 1,
+        "UNCERTAIN": 1
+      }
+    },
+    "extraction": {
+      "predicted_facts": 13,
+      "gold_facts": 21,
+      "tp": 8,
+      "fp": 5,
+      "fp_duplicates": 5,
+      "fp_unknown": 0,
+      "fn": 13,
+      "precision": 0.6154,
+      "recall": 0.381,
+      "f1": 0.4706,
+      "capture_rates": {
+        "period": 0.5,
+        "scope": 0.0
+      },
+      "gold_by_source": {
+        "current_pipeline": {
+          "total": 8,
+          "matched": 8
+        },
+        "recall_miss": {
+          "total": 13,
+          "matched": 0
+        }
+      }
+    },
+    "relationships": {
+      "raw_relationship_rows": 9,
+      "predicted_unique_pairs": 5,
+      "gold_items": 9,
+      "correct": 5,
+      "incorrect_label": 2,
+      "missed_required": 0,
+      "absent_violations": 2,
+      "accuracy": 0.5556,
+      "absent_compliance": 0.6667,
+      "per_class": {
+        "CONTRADICTS": {
+          "predicted": 1,
+          "gold_required": 0,
+          "precision": 0.0,
+          "recall": null
+        },
+        "CORROBORATES": {
+          "predicted": 2,
+          "gold_required": 0,
+          "precision": 0.0,
+          "recall": null
+        },
+        "RECONCILABLE": {
+          "predicted": 1,
+          "gold_required": 3,
+          "precision": 1.0,
+          "recall": 0.3333
+        },
+        "UNCERTAIN": {
+          "predicted": 1,
+          "gold_required": 0,
+          "precision": 0.0,
+          "recall": null
+        }
+      },
+      "details": [
+        {
+          "id": "rel-001",
+          "expectation": "label",
+          "expected": "RECONCILABLE",
+          "produced": true,
+          "predicted_label": "CONTRADICTS",
+          "outcome": "wrong(CONTRADICTS)"
+        },
+        {
+          "id": "rel-002",
+          "expectation": "absent",
+          "expected": "ABSENT",
+          "produced": true,
+          "predicted_label": "CORROBORATES",
+          "outcome": "VIOLATION"
+        },
+        {
+          "id": "rel-003",
+          "expectation": "absent",
+          "expected": "ABSENT",
+          "produced": true,
+          "predicted_label": "CORROBORATES",
+          "outcome": "VIOLATION"
+        },
+        {
+          "id": "rel-004",
+          "expectation": "label",
+          "expected": "RECONCILABLE",
+          "produced": true,
+          "predicted_label": "RECONCILABLE",
+          "outcome": "ok"
+        },
+        {
+          "id": "rel-005",
+          "expectation": "label",
+          "expected": "RECONCILABLE",
+          "produced": true,
+          "predicted_label": "UNCERTAIN",
+          "outcome": "wrong(UNCERTAIN)"
+        },
+        {
+          "id": "rel-006",
+          "expectation": "absent",
+          "expected": "ABSENT",
+          "produced": false,
+          "predicted_label": null,
+          "outcome": "ok(absent)"
+        },
+        {
+          "id": "rel-007",
+          "expectation": "absent",
+          "expected": "ABSENT",
+          "produced": false,
+          "predicted_label": null,
+          "outcome": "ok(absent)"
+        },
+        {
+          "id": "rel-008",
+          "expectation": "absent",
+          "expected": "ABSENT",
+          "produced": false,
+          "predicted_label": null,
+          "outcome": "ok(absent)"
+        },
+        {
+          "id": "rel-009",
+          "expectation": "absent",
+          "expected": "ABSENT",
+          "produced": false,
+          "predicted_label": null,
+          "outcome": "ok(absent)"
+        }
+      ]
+    }
+  },
+  "history": []
+}

@@ -29,6 +29,33 @@ ALLOWED_RELATIONSHIPS = {
     "UNCERTAIN",
 }
 
+# ---------------------------------------------------------------------------
+# Bounded status-progression vocabulary (Defect B)
+# ---------------------------------------------------------------------------
+# Canonical predicates whose values are role/status transitions.
+STATUS_PROGRESSION_PREDICATES = {
+    "board_role",
+    "associated_status",
+}
+
+# Status-transition keyword stems. A pair only counts as a progression when
+# BOTH categorical values contain one of these stems (resigned / ceased /
+# appointed / ...). Deliberately bounded: unknown strings never trigger.
+STATUS_VALUE_STEMS = (
+    "resign", "cease", "appoint", "remov", "retir",
+    "reassign", "reappoint", "terminate", "elect", "associat",
+)
+
+
+def is_status_progression_value(value: Any) -> bool:
+    """True when a categorical value looks like a role/status transition."""
+    if isinstance(value, (int, float)) or value is None:
+        return False
+    text = str(value).strip().lower()
+    if not text:
+        return False
+    return any(stem in text for stem in STATUS_VALUE_STEMS)
+
 SYSTEM_REASONING_PROMPT = """You are an expert financial and macroeconomic epistemic reasoning engine.
 Your task is to classify the relationship between two extracted factual assertions.
 
@@ -216,6 +243,41 @@ def classify_relationship_heuristically(prepared: PreparedComparison) -> FactCom
                 reason=(
                     f"Apparent difference in board status ('{fa.value}' vs '{fb.value}') is reconciled by temporal context: "
                     f"earlier disclosure dates vs subsequent resignation/cessation dates."
+                ),
+                dimensions=dims,
+            )
+
+        # 4b. Bounded status-progression rule (Defect B). Rule 4 above only
+        # fires when the effective dates DIFFER. The common failure case is
+        # the opposite: resignation and cessation recorded with the SAME
+        # effective date (e.g. 'resigned from the Board' and 'ceased to be a
+        # Director', both August 24, 2023), which used to fall through to
+        # rule 9 and surface as CONTRADICTS. Same entity, status predicate,
+        # two known transition values with equal dates are a temporal
+        # progression, not incompatible claims. Bounded to canonical status
+        # predicates + known transition vocabulary — numeric facts and
+        # unknown categorical strings never trigger it.
+        if (
+            dims.subject == "same"
+            and dims.predicate == "same"
+            and dims.value == "different"
+            and (fa.canonical_predicate or fa.predicate or "").strip().lower() in STATUS_PROGRESSION_PREDICATES
+            and is_status_progression_value(fa.value)
+            and is_status_progression_value(fb.value)
+        ):
+            if fa.as_of and fb.as_of:
+                date_ctx = f"both disclosures carry the same effective date ({fa.as_of})"
+            else:
+                date_ctx = "the disclosures are consistent with a single role sequence"
+            return FactComparison(
+                fact_a_id=fa.id,
+                fact_b_id=fb.id,
+                relationship="RECONCILABLE",
+                confidence=0.93,
+                reason=(
+                    f"Apparent difference in {fa.predicate} ('{fa.value}' vs '{fb.value}') is a temporal "
+                    f"progression for the same entity rather than a conflict: {date_ctx}, and both values "
+                    f"are recognized role-status transitions along one timeline."
                 ),
                 dimensions=dims,
             )

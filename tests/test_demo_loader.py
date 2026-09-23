@@ -144,10 +144,15 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
             assert f.evidence.page_number > 0
 
         # Relationships must contain the verified live RECONCILABLE vintage case
+        # and the Phase 4 temporal-progression case (resigned vs ceased).
         rels = db.get_relationships(limit=100)
         assert len(rels) == 3
         reconcilable = [r for r in rels if r["relationship"] == "RECONCILABLE"]
-        assert len(reconcilable) == 1
-        assert "vintage" in reconcilable[0]["reason"].lower()
+        assert len(reconcilable) == 2
+        vintage = [r for r in reconcilable if "vintage" in r["reason"].lower()]
+        assert len(vintage) == 1
+        temporal = [r for r in reconcilable if "temporal progression" in r["reason"].lower()]
+        assert len(temporal) == 1
+        assert all(r["relationship"] != "CONTRADICTS" for r in rels)
     finally:
         db.close()

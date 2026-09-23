@@ -242,7 +242,7 @@ python -m pytest tests/ -q
 ```
 
 ```
-===================== 198 passed, 7 warnings in ~32s =====================
+===================== 204 passed, 7 warnings in ~70s =====================
 ```
 
 | Test File | Count | Coverage Focus |
@@ -253,6 +253,7 @@ python -m pytest tests/ -q
 | `tests/test_gate4.py` | 37 | Epistemic relationship classification, confidence scoring, heuristic rule validation. |
 | `tests/test_gate5.py` | 12 | FastAPI endpoints, health checks, persistence operations, UI serving. |
 | `tests/test_pipeline_integration.py` | 28 | End-to-end multi-document pipeline runs, database round-trips, serialization. |
+| `tests/test_demo_loader.py` | 6 | Demo path resolution, starter dataset discovery, clean error handling, e2e smoke load. |
 | `tests/test_table_regression.py` | — | Multi-column table layout regression fixtures. |
 
 ---

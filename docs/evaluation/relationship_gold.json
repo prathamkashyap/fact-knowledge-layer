@@ -1,0 +1,144 @@
+{
+  "description": "Gold relationship set for the Fact Knowledge Layer starter corpus. Every current-pipeline pair was hand-verified against the source PDFs during Week 2 Phase 0 — the pipeline's own labels were NOT trusted. The 9 raw baseline rows collapse to 5 distinct claim-level pairs (3 CONTRADICTS rows -> 1 pair, 4 CORROBORATES rows -> 2 self-pairs, 1 RECONCILABLE, 1 UNCERTAIN). Additional candidate pairs test that unrelated pairs are not surfaced as meaningful relationships.",
+  "pair_key": "unordered pair of claim-core keys, each claim-core = subject|predicate|value|unit after whitespace normalization and numeric stringification; evidence page is NOT part of the key",
+  "expectation_types": {
+    "label": "If the pair is produced, its relationship must equal expected. If required and absent, it counts as a miss.",
+    "absent": "The pair must not be produced as a relationship at all. Production with any label is a failure; absence is correct."
+  },
+  "corpus": "starter-datasets (6 PDFs), clean offline heuristic run",
+  "verified_on": "2026-09-23",
+  "items": [
+    {
+      "id": "rel-001",
+      "expectation": "label",
+      "expected": "RECONCILABLE",
+      "fact_a": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "resigned from the Board", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 33},
+      "fact_b": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "current_pipeline_label": "CONTRADICTS",
+      "current_pipeline_rows": 3,
+      "source_verified": true,
+      "verdict": "defect_artifact",
+      "defects": ["A", "B"],
+      "note": "Source p.33: resigned 'with effect from August 24, 2023'; p.40/p.43: ceased 'with effect from August 24, 2023'. Same entity, same effective date, compatible claims (resignation causes cessation). Not a contradiction. 3 raw rows are Defect A multiplicity; the CONTRADICTS label is Defect B. Gold label: RECONCILABLE (temporal progression)."
+    },
+    {
+      "id": "rel-002",
+      "expectation": "absent",
+      "expected": "ABSENT",
+      "fact_a": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "fact_b": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 43},
+      "current_pipeline_label": "CORROBORATES",
+      "current_pipeline_rows": 2,
+      "source_verified": true,
+      "verdict": "defect_artifact",
+      "defects": ["A"],
+      "note": "Identical claim repeated on two pages of the SAME document. After dedup there is one fact with two provenance spans, not two facts — no relationship should exist. Current CORROBORATES rows are duplication artifacts (the reason text wrongly calls them 'independent sources')."
+    },
+    {
+      "id": "rel-003",
+      "expectation": "absent",
+      "expected": "ABSENT",
+      "fact_a": {"subject": "Donald Francis Colleran", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "fact_b": {"subject": "Donald Francis Colleran", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 43},
+      "current_pipeline_label": "CORROBORATES",
+      "current_pipeline_rows": 2,
+      "source_verified": true,
+      "verdict": "defect_artifact",
+      "defects": ["A"],
+      "note": "Identical claim repeated on two pages of the SAME document (Sept 27, 2023 both places). Duplication artifact of Defect A; must not surface as a relationship after dedup."
+    },
+    {
+      "id": "rel-004",
+      "expectation": "label",
+      "expected": "RECONCILABLE",
+      "fact_a": {"subject": "India real GDP growth", "predicate": "growth rate", "value": "6.5", "unit": "per cent", "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf", "evidence_page": 10},
+      "fact_b": {"subject": "India real GDP growth", "predicate": "growth rate", "value": "6.4", "unit": "per cent", "evidence_document": "01-india-economic-survey-2024-25-excerpt.pdf", "evidence_page": 4},
+      "current_pipeline_label": "RECONCILABLE",
+      "current_pipeline_rows": 1,
+      "source_verified": true,
+      "verdict": "genuine",
+      "defects": [],
+      "note": "IMF reports 6.5 percent FY2024/25; Economic Survey First Advance Estimate reports 6.4 percent FY25. Same metric, same period, different estimate vintages -> genuinely RECONCILABLE. The only baseline relationship that was already correct."
+    },
+    {
+      "id": "rel-005",
+      "expectation": "label",
+      "expected": "RECONCILABLE",
+      "fact_a": {"subject": "delhivery revenue", "predicate": "revenue", "value": "74540.82", "unit": "INR million", "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 22},
+      "fact_b": {"subject": "delhivery revenue", "predicate": "revenue", "value": "81415.38", "unit": "INR million", "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 22},
+      "current_pipeline_label": "UNCERTAIN",
+      "current_pipeline_rows": 1,
+      "source_verified": true,
+      "verdict": "limitation_artifact",
+      "defects": ["L1"],
+      "note": "Same sentence pair on p.22: standalone vs consolidated basis for FY24. Source states both scopes explicitly; extractor leaves scope=None (L1), so the pair reads UNCERTAIN instead of RECONCILABLE by scope. Gold label after source verification: RECONCILABLE."
+    },
+    {
+      "id": "rel-006",
+      "expectation": "absent",
+      "expected": "ABSENT",
+      "fact_a": {"subject": "Sandeep Kumar Barasia", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "fact_b": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "current_pipeline_label": null,
+      "current_pipeline_rows": 0,
+      "source_verified": true,
+      "verdict": "negative_candidate",
+      "defects": [],
+      "note": "Different entities with the same status value. Should not surface as a meaningful cross-document relationship; absence is the correct outcome."
+    },
+    {
+      "id": "rel-007",
+      "expectation": "absent",
+      "expected": "ABSENT",
+      "fact_a": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "resigned from the Board", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 33},
+      "fact_b": {"subject": "India real GDP growth", "predicate": "growth rate", "value": "6.5", "unit": "per cent", "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf", "evidence_page": 10},
+      "current_pipeline_label": null,
+      "current_pipeline_rows": 0,
+      "source_verified": true,
+      "verdict": "negative_candidate",
+      "defects": [],
+      "note": "Unrelated subjects (director status vs macro growth rate). Should never be compared; absence is correct."
+    },
+    {
+      "id": "rel-008",
+      "expectation": "absent",
+      "expected": "ABSENT",
+      "fact_a": {"subject": "delhivery revenue", "predicate": "revenue", "value": "74540.82", "unit": "INR million", "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 22},
+      "fact_b": {"subject": "Suvir Suren Sujan", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "current_pipeline_label": null,
+      "current_pipeline_rows": 0,
+      "source_verified": true,
+      "verdict": "negative_candidate",
+      "defects": [],
+      "note": "Unrelated subjects (company revenue vs director status). Should never be compared; absence is correct."
+    },
+    {
+      "id": "rel-009",
+      "expectation": "absent",
+      "expected": "ABSENT",
+      "fact_a": {"subject": "Donald Francis Colleran", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "fact_b": {"subject": "Sandeep Kumar Barasia", "predicate": "board status", "value": "ceased to be a Director", "unit": null, "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf", "evidence_page": 40},
+      "current_pipeline_label": null,
+      "current_pipeline_rows": 0,
+      "source_verified": true,
+      "verdict": "negative_candidate",
+      "defects": [],
+      "note": "Different entities, same status value and document. Should not surface; absence is correct."
+    }
+  ],
+  "current_pipeline_rows": {
+    "description": "The 9 raw relationship rows from the Week 1 clean baseline run and their mapping to gold items after claim-level collapse.",
+    "rows": [
+      {"row": 1, "label": "CONTRADICTS", "pair": "Suvir resigned (p.33) x Suvir ceased (p.40)", "gold_id": "rel-001", "source_verdict": "artifact — same effective date August 24, 2023"},
+      {"row": 2, "label": "CONTRADICTS", "pair": "Suvir resigned (p.33) x Suvir ceased (p.40)", "gold_id": "rel-001", "source_verdict": "artifact — duplicate of row 1"},
+      {"row": 3, "label": "CONTRADICTS", "pair": "Suvir resigned (p.33) x Suvir ceased (p.43)", "gold_id": "rel-001", "source_verdict": "artifact — cross-page duplicate of rows 1-2"},
+      {"row": 4, "label": "CORROBORATES", "pair": "Suvir ceased (p.40) x Suvir ceased (p.43)", "gold_id": "rel-002", "source_verdict": "artifact — same-doc duplicate claim, not independent sources"},
+      {"row": 5, "label": "CORROBORATES", "pair": "Suvir ceased (p.40) x Suvir ceased (p.43)", "gold_id": "rel-002", "source_verdict": "artifact — duplicate of row 4"},
+      {"row": 6, "label": "CORROBORATES", "pair": "Colleran ceased (p.40) x Colleran ceased (p.43)", "gold_id": "rel-003", "source_verdict": "artifact — same-doc duplicate claim"},
+      {"row": 7, "label": "CORROBORATES", "pair": "Colleran ceased (p.40) x Colleran ceased (p.43)", "gold_id": "rel-003", "source_verdict": "artifact — duplicate of row 6"},
+      {"row": 8, "label": "RECONCILABLE", "pair": "India GDP 6.5 (IMF) x India GDP 6.4 (ES)", "gold_id": "rel-004", "source_verdict": "genuine — different estimate vintages"},
+      {"row": 9, "label": "UNCERTAIN", "pair": "revenue 74540.82 x revenue 81415.38", "gold_id": "rel-005", "source_verdict": "limitation artifact — scopes visible in source, extractor missed them (L1)"}
+    ],
+    "summary": {"rows": 9, "genuine_correct_label": 1, "defect_artifacts": 7, "limitation_artifacts": 1}
+  }
+}

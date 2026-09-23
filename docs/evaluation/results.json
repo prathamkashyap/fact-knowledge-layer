@@ -1,10 +1,10 @@
 {
   "latest": {
-    "label": "post-scope-fix",
-    "timestamp": "2026-09-23T11:00:56+00:00",
+    "label": "post-evidence-validation",
+    "timestamp": "2026-09-23T11:08:29+00:00",
     "source": "fresh_run",
     "documents": 6,
-    "wall_seconds": 34.57,
+    "wall_seconds": 44.43,
     "per_document": [
       {
         "dataset": "india-macroeconomy",
@@ -14,9 +14,10 @@
         "total_pages": 89,
         "candidate_pages_count": 55,
         "facts_count": 1,
+        "evidence_rejected_count": 0,
         "comparisons_count": 0,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 3414.2
+        "processing_time_ms": 3413.3
       },
       {
         "dataset": "india-macroeconomy",
@@ -26,9 +27,10 @@
         "total_pages": 100,
         "candidate_pages_count": 88,
         "facts_count": 0,
+        "evidence_rejected_count": 0,
         "comparisons_count": 0,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 2644.91
+        "processing_time_ms": 2538.82
       },
       {
         "dataset": "india-macroeconomy",
@@ -38,9 +40,10 @@
         "total_pages": 95,
         "candidate_pages_count": 44,
         "facts_count": 1,
+        "evidence_rejected_count": 0,
         "comparisons_count": 1,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 4515.24
+        "processing_time_ms": 8036.15
       },
       {
         "dataset": "delhivery",
@@ -50,9 +53,10 @@
         "total_pages": 100,
         "candidate_pages_count": 64,
         "facts_count": 0,
+        "evidence_rejected_count": 0,
         "comparisons_count": 1,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 2564.55
+        "processing_time_ms": 3430.84
       },
       {
         "dataset": "delhivery",
@@ -62,9 +66,10 @@
         "total_pages": 100,
         "candidate_pages_count": 80,
         "facts_count": 6,
+        "evidence_rejected_count": 0,
         "comparisons_count": 3,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 8270.6
+        "processing_time_ms": 11185.84
       },
       {
         "dataset": "delhivery",
@@ -74,9 +79,10 @@
         "total_pages": 27,
         "candidate_pages_count": 16,
         "facts_count": 0,
+        "evidence_rejected_count": 0,
         "comparisons_count": 3,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 497.05
+        "processing_time_ms": 802.76
       }
     ],
     "raw_counts": {
@@ -878,6 +884,233 @@
             "produced": true,
             "predicted_label": "UNCERTAIN",
             "outcome": "wrong(UNCERTAIN)"
+          },
+          {
+            "id": "rel-006",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-007",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-008",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-009",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          }
+        ]
+      }
+    },
+    {
+      "label": "post-scope-fix",
+      "timestamp": "2026-09-23T11:00:56+00:00",
+      "source": "fresh_run",
+      "documents": 6,
+      "wall_seconds": 34.57,
+      "per_document": [
+        {
+          "dataset": "india-macroeconomy",
+          "file": "01-india-economic-survey-2024-25-excerpt.pdf",
+          "document_id": "9a696265905e",
+          "filename": "01-india-economic-survey-2024-25-excerpt.pdf",
+          "total_pages": 89,
+          "candidate_pages_count": 55,
+          "facts_count": 1,
+          "comparisons_count": 0,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 3414.2
+        },
+        {
+          "dataset": "india-macroeconomy",
+          "file": "02-rbi-annual-report-2024-25-excerpt.pdf",
+          "document_id": "d9ef55d30a57",
+          "filename": "02-rbi-annual-report-2024-25-excerpt.pdf",
+          "total_pages": 100,
+          "candidate_pages_count": 88,
+          "facts_count": 0,
+          "comparisons_count": 0,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 2644.91
+        },
+        {
+          "dataset": "india-macroeconomy",
+          "file": "03-imf-india-2025-article-iv-excerpt.pdf",
+          "document_id": "98c73c9e13da",
+          "filename": "03-imf-india-2025-article-iv-excerpt.pdf",
+          "total_pages": 95,
+          "candidate_pages_count": 44,
+          "facts_count": 1,
+          "comparisons_count": 1,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 4515.24
+        },
+        {
+          "dataset": "delhivery",
+          "file": "01-delhivery-prospectus-2022-excerpt.pdf",
+          "document_id": "817b305a6e36",
+          "filename": "01-delhivery-prospectus-2022-excerpt.pdf",
+          "total_pages": 100,
+          "candidate_pages_count": 64,
+          "facts_count": 0,
+          "comparisons_count": 1,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 2564.55
+        },
+        {
+          "dataset": "delhivery",
+          "file": "02-delhivery-annual-report-fy24-excerpt.pdf",
+          "document_id": "0dedd7093f73",
+          "filename": "02-delhivery-annual-report-fy24-excerpt.pdf",
+          "total_pages": 100,
+          "candidate_pages_count": 80,
+          "facts_count": 6,
+          "comparisons_count": 3,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 8270.6
+        },
+        {
+          "dataset": "delhivery",
+          "file": "03-delhivery-q4-fy24-earnings-presentation.pdf",
+          "document_id": "ba87114a4766",
+          "filename": "03-delhivery-q4-fy24-earnings-presentation.pdf",
+          "total_pages": 27,
+          "candidate_pages_count": 16,
+          "facts_count": 0,
+          "comparisons_count": 3,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 497.05
+        }
+      ],
+      "raw_counts": {
+        "documents": 6,
+        "pages": 511,
+        "facts": 8,
+        "relationships": 3,
+        "relationship_breakdown": {
+          "RECONCILABLE": 3
+        }
+      },
+      "extraction": {
+        "predicted_facts": 8,
+        "gold_facts": 21,
+        "tp": 8,
+        "fp": 0,
+        "fp_duplicates": 0,
+        "fp_unknown": 0,
+        "fn": 13,
+        "precision": 1.0,
+        "recall": 0.381,
+        "f1": 0.5517,
+        "capture_rates": {
+          "period": 1.0,
+          "scope": 1.0
+        },
+        "gold_by_source": {
+          "current_pipeline": {
+            "total": 8,
+            "matched": 8
+          },
+          "recall_miss": {
+            "total": 13,
+            "matched": 0
+          }
+        }
+      },
+      "relationships": {
+        "raw_relationship_rows": 3,
+        "predicted_unique_pairs": 3,
+        "gold_items": 9,
+        "correct": 9,
+        "incorrect_label": 0,
+        "missed_required": 0,
+        "absent_violations": 0,
+        "accuracy": 1.0,
+        "absent_compliance": 1.0,
+        "per_class": {
+          "CONTRADICTS": {
+            "predicted": 0,
+            "gold_required": 0,
+            "precision": null,
+            "recall": null
+          },
+          "CORROBORATES": {
+            "predicted": 0,
+            "gold_required": 0,
+            "precision": null,
+            "recall": null
+          },
+          "RECONCILABLE": {
+            "predicted": 3,
+            "gold_required": 3,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "UNCERTAIN": {
+            "predicted": 0,
+            "gold_required": 0,
+            "precision": null,
+            "recall": null
+          }
+        },
+        "details": [
+          {
+            "id": "rel-001",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-002",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-003",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-004",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-005",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
           },
           {
             "id": "rel-006",

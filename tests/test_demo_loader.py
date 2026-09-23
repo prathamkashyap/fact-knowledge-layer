@@ -143,16 +143,18 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
             assert f.evidence.document_name
             assert f.evidence.page_number > 0
 
-        # Relationships must contain the verified live RECONCILABLE vintage case
-        # and the Phase 4 temporal-progression case (resigned vs ceased).
+        # Relationships: all three are RECONCILABLE after Phases 3-5
+        # (GDP estimate vintage, resigned-vs-ceased temporal progression,
+        # standalone-vs-consolidated scope) — zero CONTRADICTS, zero UNCERTAIN.
         rels = db.get_relationships(limit=100)
         assert len(rels) == 3
         reconcilable = [r for r in rels if r["relationship"] == "RECONCILABLE"]
-        assert len(reconcilable) == 2
-        vintage = [r for r in reconcilable if "vintage" in r["reason"].lower()]
-        assert len(vintage) == 1
-        temporal = [r for r in reconcilable if "temporal progression" in r["reason"].lower()]
-        assert len(temporal) == 1
-        assert all(r["relationship"] != "CONTRADICTS" for r in rels)
+        assert len(reconcilable) == 3
+        assert [r for r in rels if r["relationship"] == "CONTRADICTS"] == []
+        assert [r for r in rels if r["relationship"] == "UNCERTAIN"] == []
+        assert len([r for r in reconcilable if "vintage" in r["reason"].lower()]) == 1
+        assert len([r for r in reconcilable if "temporal progression" in r["reason"].lower()]) == 1
+        assert len([r for r in reconcilable if "standalone" in r["reason"].lower()
+                    and "consolidated" in r["reason"].lower()]) == 1
     finally:
         db.close()

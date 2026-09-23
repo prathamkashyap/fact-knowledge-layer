@@ -142,13 +142,26 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
         )
         if not already_captured:
             entity = _extract_entity_from_context(page.filename)
+            # L1: recover the reporting basis and fiscal year from the matched
+            # sentence. The broad pattern itself cannot capture them (its
+            # precision twin fails on the rupee-symbol wording), which is how
+            # standalone/consolidated pairs used to reach the reasoner with
+            # scope=None and read UNCERTAIN instead of RECONCILABLE.
+            scope = None
+            scope_match = re.search(r"\bon\s+(standalone|consolidated)\s+basis\b", sentence, re.IGNORECASE)
+            if scope_match:
+                scope = scope_match.group(1).lower()
+            period = None
+            period_match = re.search(r"\b(FY\d{2,4})\b", sentence, re.IGNORECASE)
+            if period_match:
+                period = period_match.group(1).upper()
             facts.append(Fact(
                 subject=f"{entity} revenue",
                 predicate="revenue",
                 value=val,
                 unit=unit,
-                period=None,
-                scope=None,
+                period=period,
+                scope=scope,
                 qualifiers=[],
                 evidence=Evidence(
                     document_id=page.document_id,

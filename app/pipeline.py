@@ -393,6 +393,51 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
                 confidence=0.95,
             ))
 
+    # 4b. Director appointment events (Week 5 recall cycle):
+    # "... was appointed as Non-Executive Independent Director
+    # [for a period of N years] with effect from <Month DD, YYYY>".
+    # Anchored on the independence-director role AND the date slot so the
+    # committee-membership footnote, officer-appointment notes, Monitoring/
+    # Internal Auditor sentences, and remuneration-revision clauses in the
+    # same corpus cannot fire (corpus-wide blast radius: exactly the two
+    # source-verified claims ex-014/ex-015, both on the annual report).
+    # Case-sensitive on purpose (same rationale as pattern 3 above): the
+    # capitalized name/role/date shapes reject prose fragments.
+    appointment_pattern = re.compile(
+        r"([A-Z][a-zA-Z\.\s]{2,48}?)\s+(?:was|has\s+been)\s+appointed\s+as\s+"
+        r"(Non-Executive\s+Independent\s+Director)"
+        r"(?:\s+for\s+a\s+period\s+of\s+(\d+)\s+years?)?"
+        r"\s+with\s+effect\s+from\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})"
+    )
+    for match in appointment_pattern.finditer(full_clean_text):
+        sentence = match.group(0).strip()
+        person = match.group(1).strip().replace("Mr.", "").replace("Ms.", "").strip()
+        last_word = person.split()[-1].lower() if person.split() else ""
+        if (
+            last_word in invalid_name_trailing
+            or len(person.split()) < 2
+            or len(person.split()) > 6
+        ):
+            continue
+        term_qualifiers = [f"{match.group(3)} year term"] if match.group(3) else []
+        facts.append(Fact(
+            subject=person,
+            predicate="board status",
+            value=f"appointed as {match.group(2)}",
+            unit=None,
+            period=None,
+            as_of=match.group(4),
+            scope=None,
+            qualifiers=term_qualifiers,
+            evidence=Evidence(
+                document_id=page.document_id,
+                page_number=page.page_number,
+                text=sentence,
+                document_name=page.filename,
+            ),
+            confidence=0.95,
+        ))
+
     return facts
 
 

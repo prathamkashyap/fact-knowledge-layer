@@ -129,10 +129,12 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
         # Post-dedup baseline (Defect A fixed): 13 raw rows collapse to 8
         # unique claims; Week 3 Cluster G adds 7 macro-indicator claims
         # (ex-017..ex-020, ex-022..ex-024); Week 4 adds 6 comparative
-        # financial-highlights claims (ex-009, ex-010, ex-011, ex-025..ex-027)
-        # for 21 total. Relationship cross-products collapse to 24 pairs
-        # (3 baseline + 10 Cluster G + 11 Week 4 p.22 pairs).
-        assert stats["total_facts"] == 21
+        # financial-highlights claims (ex-009, ex-010, ex-011, ex-025..ex-027);
+        # Week 5 adds 2 director-appointment claims (ex-014, ex-015)
+        # for 23 total. Relationship cross-products collapse to 24 pairs
+        # (3 baseline + 10 Cluster G + 11 Week 4 p.22 pairs) — the two
+        # singleton appointment claims induce no new pairs.
+        assert stats["total_facts"] == 23
         assert stats["total_relationships"] == 24
 
         # Ensure documents > 0 and facts > 0 per acceptance criteria
@@ -141,7 +143,7 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
 
         # Facts must have non-empty grounded evidence
         facts = db.get_facts(limit=100)
-        assert len(facts) == 21
+        assert len(facts) == 23
         for f in facts:
             assert f.evidence.text
             assert f.evidence.document_name

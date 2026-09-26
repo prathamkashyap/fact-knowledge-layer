@@ -1,10 +1,10 @@
 {
   "latest": {
-    "label": "week4-p22-highlights",
-    "timestamp": "2026-09-26T05:06:17+00:00",
+    "label": "week5-director-appointments",
+    "timestamp": "2026-09-26T06:12:49+00:00",
     "source": "fresh_run",
     "documents": 6,
-    "wall_seconds": 29.2,
+    "wall_seconds": 29.08,
     "per_document": [
       {
         "dataset": "india-macroeconomy",
@@ -17,7 +17,7 @@
         "evidence_rejected_count": 0,
         "comparisons_count": 0,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 3036.83
+        "processing_time_ms": 3029.37
       },
       {
         "dataset": "india-macroeconomy",
@@ -30,7 +30,7 @@
         "evidence_rejected_count": 0,
         "comparisons_count": 1,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 2495.01
+        "processing_time_ms": 2502.04
       },
       {
         "dataset": "india-macroeconomy",
@@ -43,7 +43,7 @@
         "evidence_rejected_count": 0,
         "comparisons_count": 11,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 4113.64
+        "processing_time_ms": 4087.75
       },
       {
         "dataset": "delhivery",
@@ -56,7 +56,7 @@
         "evidence_rejected_count": 0,
         "comparisons_count": 11,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 1980.04
+        "processing_time_ms": 1979.11
       },
       {
         "dataset": "delhivery",
@@ -65,11 +65,11 @@
         "filename": "02-delhivery-annual-report-fy24-excerpt.pdf",
         "total_pages": 100,
         "candidate_pages_count": 80,
-        "facts_count": 12,
+        "facts_count": 14,
         "evidence_rejected_count": 0,
         "comparisons_count": 24,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 7195.57
+        "processing_time_ms": 7073.65
       },
       {
         "dataset": "delhivery",
@@ -82,13 +82,13 @@
         "evidence_rejected_count": 0,
         "comparisons_count": 24,
         "reasoning_mode": "heuristic",
-        "processing_time_ms": 369.48
+        "processing_time_ms": 367.73
       }
     ],
     "raw_counts": {
       "documents": 6,
       "pages": 511,
-      "facts": 21,
+      "facts": 23,
       "relationships": 24,
       "relationship_breakdown": {
         "RECONCILABLE": 20,
@@ -96,16 +96,16 @@
       }
     },
     "extraction": {
-      "predicted_facts": 21,
+      "predicted_facts": 23,
       "gold_facts": 27,
-      "tp": 21,
+      "tp": 23,
       "fp": 0,
       "fp_duplicates": 0,
       "fp_unknown": 0,
-      "fn": 6,
+      "fn": 4,
       "precision": 1.0,
-      "recall": 0.7778,
-      "f1": 0.875,
+      "recall": 0.8519,
+      "f1": 0.92,
       "capture_rates": {
         "period": 1.0,
         "scope": 1.0
@@ -117,7 +117,7 @@
         },
         "recall_miss": {
           "total": 16,
-          "matched": 10
+          "matched": 12
         },
         "audit_addition": {
           "total": 3,
@@ -2638,6 +2638,412 @@
           },
           {
             "id": "rel-019",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "label": "week4-p22-highlights",
+      "timestamp": "2026-09-26T05:06:17+00:00",
+      "source": "fresh_run",
+      "documents": 6,
+      "wall_seconds": 29.2,
+      "per_document": [
+        {
+          "dataset": "india-macroeconomy",
+          "file": "01-india-economic-survey-2024-25-excerpt.pdf",
+          "document_id": "9a696265905e",
+          "filename": "01-india-economic-survey-2024-25-excerpt.pdf",
+          "total_pages": 89,
+          "candidate_pages_count": 55,
+          "facts_count": 1,
+          "evidence_rejected_count": 0,
+          "comparisons_count": 0,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 3036.83
+        },
+        {
+          "dataset": "india-macroeconomy",
+          "file": "02-rbi-annual-report-2024-25-excerpt.pdf",
+          "document_id": "d9ef55d30a57",
+          "filename": "02-rbi-annual-report-2024-25-excerpt.pdf",
+          "total_pages": 100,
+          "candidate_pages_count": 88,
+          "facts_count": 2,
+          "evidence_rejected_count": 0,
+          "comparisons_count": 1,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 2495.01
+        },
+        {
+          "dataset": "india-macroeconomy",
+          "file": "03-imf-india-2025-article-iv-excerpt.pdf",
+          "document_id": "98c73c9e13da",
+          "filename": "03-imf-india-2025-article-iv-excerpt.pdf",
+          "total_pages": 95,
+          "candidate_pages_count": 44,
+          "facts_count": 6,
+          "evidence_rejected_count": 0,
+          "comparisons_count": 11,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 4113.64
+        },
+        {
+          "dataset": "delhivery",
+          "file": "01-delhivery-prospectus-2022-excerpt.pdf",
+          "document_id": "817b305a6e36",
+          "filename": "01-delhivery-prospectus-2022-excerpt.pdf",
+          "total_pages": 100,
+          "candidate_pages_count": 64,
+          "facts_count": 0,
+          "evidence_rejected_count": 0,
+          "comparisons_count": 11,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 1980.04
+        },
+        {
+          "dataset": "delhivery",
+          "file": "02-delhivery-annual-report-fy24-excerpt.pdf",
+          "document_id": "0dedd7093f73",
+          "filename": "02-delhivery-annual-report-fy24-excerpt.pdf",
+          "total_pages": 100,
+          "candidate_pages_count": 80,
+          "facts_count": 12,
+          "evidence_rejected_count": 0,
+          "comparisons_count": 24,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 7195.57
+        },
+        {
+          "dataset": "delhivery",
+          "file": "03-delhivery-q4-fy24-earnings-presentation.pdf",
+          "document_id": "ba87114a4766",
+          "filename": "03-delhivery-q4-fy24-earnings-presentation.pdf",
+          "total_pages": 27,
+          "candidate_pages_count": 16,
+          "facts_count": 0,
+          "evidence_rejected_count": 0,
+          "comparisons_count": 24,
+          "reasoning_mode": "heuristic",
+          "processing_time_ms": 369.48
+        }
+      ],
+      "raw_counts": {
+        "documents": 6,
+        "pages": 511,
+        "facts": 21,
+        "relationships": 24,
+        "relationship_breakdown": {
+          "RECONCILABLE": 20,
+          "UNCERTAIN": 4
+        }
+      },
+      "extraction": {
+        "predicted_facts": 21,
+        "gold_facts": 27,
+        "tp": 21,
+        "fp": 0,
+        "fp_duplicates": 0,
+        "fp_unknown": 0,
+        "fn": 6,
+        "precision": 1.0,
+        "recall": 0.7778,
+        "f1": 0.875,
+        "capture_rates": {
+          "period": 1.0,
+          "scope": 1.0
+        },
+        "gold_by_source": {
+          "current_pipeline": {
+            "total": 8,
+            "matched": 8
+          },
+          "recall_miss": {
+            "total": 16,
+            "matched": 10
+          },
+          "audit_addition": {
+            "total": 3,
+            "matched": 3
+          }
+        }
+      },
+      "relationships": {
+        "raw_relationship_rows": 24,
+        "predicted_unique_pairs": 24,
+        "gold_items": 30,
+        "correct": 30,
+        "incorrect_label": 0,
+        "missed_required": 0,
+        "absent_violations": 0,
+        "accuracy": 1.0,
+        "absent_compliance": 1.0,
+        "per_class": {
+          "CONTRADICTS": {
+            "predicted": 0,
+            "gold_required": 0,
+            "precision": null,
+            "recall": null
+          },
+          "CORROBORATES": {
+            "predicted": 0,
+            "gold_required": 0,
+            "precision": null,
+            "recall": null
+          },
+          "RECONCILABLE": {
+            "predicted": 20,
+            "gold_required": 20,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "UNCERTAIN": {
+            "predicted": 4,
+            "gold_required": 4,
+            "precision": 1.0,
+            "recall": 1.0
+          }
+        },
+        "details": [
+          {
+            "id": "rel-001",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-002",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-003",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-004",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-005",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-006",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-007",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-008",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-009",
+            "expectation": "absent",
+            "expected": "ABSENT",
+            "produced": false,
+            "predicted_label": null,
+            "outcome": "ok(absent)"
+          },
+          {
+            "id": "rel-010",
+            "expectation": "label",
+            "expected": "UNCERTAIN",
+            "produced": true,
+            "predicted_label": "UNCERTAIN",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-011",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-012",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-013",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-014",
+            "expectation": "label",
+            "expected": "UNCERTAIN",
+            "produced": true,
+            "predicted_label": "UNCERTAIN",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-015",
+            "expectation": "label",
+            "expected": "UNCERTAIN",
+            "produced": true,
+            "predicted_label": "UNCERTAIN",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-016",
+            "expectation": "label",
+            "expected": "UNCERTAIN",
+            "produced": true,
+            "predicted_label": "UNCERTAIN",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-017",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-018",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-019",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-020",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-021",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-022",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-023",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-024",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-025",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-026",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-027",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-028",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-029",
+            "expectation": "label",
+            "expected": "RECONCILABLE",
+            "produced": true,
+            "predicted_label": "RECONCILABLE",
+            "outcome": "ok"
+          },
+          {
+            "id": "rel-030",
             "expectation": "label",
             "expected": "RECONCILABLE",
             "produced": true,

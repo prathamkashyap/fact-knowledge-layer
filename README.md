@@ -311,7 +311,7 @@ Week 2 added a quantitative harness with hand-verified gold sets:
 
 ### Week 3 Cluster G (gold_version week3-phase0)
 
-A corpus-wide audit classified all 16 remaining `recall_miss` gold claims: **0 candidate-page misses, 0 table-layout misses, 13/13 sentence-pattern gaps**, clustered by cause (macro indicators, comparative periods, loss wording, textual as-of, associated status, appointments, GDP acronym, KPI units). Phase 0/1 closed the macro-indicator cluster:
+A corpus-wide audit of the **original 13** `recall_miss` claims found **0 candidate-page misses, 0 table-layout misses, and 13/13 sentence-pattern gaps**, clustered by cause (macro indicators, comparative periods, loss wording, textual as-of, associated status, appointments, GDP acronym, KPI units). The Week 3 gold-completeness revision then added 3 more source-verified claims, so the gold set now carries **16** `recall_miss` items — Cluster G closes 7 of them and 9 remain tracked. Phase 0/1 closed the macro-indicator cluster:
 
 - **Gold completeness first:** a blast-radius scan of all candidate pages found 3 additional source-verified claims beyond the original four (RBI annual `4.6 per cent in 2024-25`, RBI March 2025 `3.3 per cent`, IMF FY2026/27 projection `4 per cent`), and corrected ex-020's inferred period to the source wording (`September`). The induced matcher pairs were enumerated and source-verified (rel-010..rel-019: 6 RECONCILABLE, 4 UNCERTAIN) *before* any code changed. The `week2-frozen` results snapshot was left untouched.
 - **Closed extraction map:** a four-indicator, one-grammar family (`private consumption growth`, `headline inflation`, `core inflation`, `unemployment` with an `(at|to) <number> percent` anchor) extracts exactly those 7 claims and nothing else — guarded by named per-claim regressions, negative-grammar guards, and a corpus-wide blast-radius test asserting the exact claim set.
@@ -381,5 +381,6 @@ In accordance with transparent engineering disclosure, development of this proje
 - **MiMo (`mimo-v2.5-free`):** Primary agent for initial Gates 0–2 scaffolding, PyMuPDF candidate scoring routines, and core unit test suites.
 - **GitHub Copilot:** Code completion and docstring typing assistance throughout development.
 - **Gemini 3.8 Flash High:** Architecture review, implementation of Gate 3–5 normalization, candidate matching, epistemic relationship reasoning heuristics, SQLite persistence, FastAPI routes, zero-build UI, baseline audit verification, and repository polish.
+- **MiMo (`mimo-v2.6-flash-free`):** Week 3 (Cluster G) — recall-miss audit, gold-completeness revision, macro-indicator extraction family, period-reconciliation reasoning, normalizer/evaluator bug fixes, and all accompanying tests and documentation sync. (Week 2 phase attribution not yet recorded here.)
 
 All architectural decisions, epistemic rules, test validations, and factual claims were verified and tested directly in local execution.

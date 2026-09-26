@@ -340,6 +340,39 @@ def classify_relationship_heuristically(prepared: PreparedComparison) -> FactCom
             dimensions=dims,
         )
 
+    # 8b. Numeric same-metric difference explained by different, both-known
+    # reporting periods (e.g. headline inflation in September 2025 versus
+    # the 2024-25 annual average). Rule 9 cannot fire — it requires
+    # period == "same" — and rule 1 only catches the missing-period case,
+    # so without this rule every cross-period numeric difference fell
+    # through to the default UNCERTAIN. Bounded: numeric values only,
+    # same subject/predicate/scope, periods present and different,
+    # no forecast qualifiers (rule 3 owns those). This is period
+    # reconciliation, not a claim that the numbers agree.
+    if (
+        nc
+        and nc.is_numeric
+        and dims.subject == "same"
+        and dims.predicate == "same"
+        and dims.period == "different"
+        and dims.scope == "same"
+        and dims.value == "different"
+        and not is_forecast_a
+        and not is_forecast_b
+    ):
+        return FactComparison(
+            fact_a_id=fa.id,
+            fact_b_id=fb.id,
+            relationship="RECONCILABLE",
+            confidence=0.90,
+            reason=(
+                f"Both figures report the same metric for the same scope, but for different "
+                f"reporting periods ({fa.period or 'unknown'} versus {fb.period or 'unknown'}), "
+                f"which explains the value difference ({fa.value} versus {fb.value} {fa.unit or ''})."
+            ),
+            dimensions=dims,
+        )
+
     # 9. Genuine contradiction check: same subject, predicate, period, scope, compatible qualifiers, but materially different values
     if (
         dims.subject == "same"

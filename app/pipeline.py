@@ -98,6 +98,55 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
                 confidence=0.95,
             ))
 
+    # 1b. Macro indicator statements (Week 3 Cluster G). One closed
+    # indicator map, one shared grammar: "<indicator> [up to 5 words]
+    # (at|to) <number> percent [in <period>]", with an optional leading
+    # "In FY..." period. Bounded on purpose — a closed map plus the
+    # at/to anchor keeps the blast radius at the seven source-verified
+    # claims (ex-017..ex-020, ex-022..ex-024) and cannot fire on
+    # investment growth, CPI projection, or "averaged 4.6 per cent".
+    macro_indicators = (
+        ("private consumption growth", "India private consumption growth", "growth rate", None),
+        ("headline inflation", "India headline inflation", "inflation rate", None),
+        ("core inflation", "India core inflation", "inflation rate", "core"),
+        ("unemployment", "India unemployment", "unemployment rate", None),
+    )
+    macro_month = (
+        r"(?:January|February|March|April|May|June|July|August"
+        r"|September|October|November|December)(?:\s+20\d{2})?"
+    )
+    macro_period = rf"(?:{macro_month}|FY\d{{2,4}}(?:[-/]\d{{2,4}})?|\b\d{{4}}-\d{{2}}\b)"
+    macro_lead = r"(?:In\s+(FY\d{2,4}(?:[-/]\d{2,4})?)\s*,?\s+)?"
+    macro_gap = r"\s+\w+(?:\s+\w+){0,4}\s+"
+    macro_val = r"(?:at|to)\s+(\d+(?:\.\d+)?)\s*(?:per\s*cent|percent|%)"
+    macro_trail = rf"(?:\s+in\s+({macro_period}))?"
+    for ind_phrase, macro_subject, macro_predicate, macro_qual in macro_indicators:
+        macro_pat = re.compile(
+            rf"{macro_lead}\b{re.escape(ind_phrase)}{macro_gap}{macro_val}{macro_trail}",
+            re.IGNORECASE,
+        )
+        for match in macro_pat.finditer(full_clean_text):
+            period_str = match.group(1) or match.group(3)
+            qualifiers: List[str] = [macro_qual] if macro_qual else []
+            if re.search(r"\b(?:expected|projected|forecast)\b", match.group(0), re.IGNORECASE):
+                qualifiers.append("forecast")
+            facts.append(Fact(
+                subject=macro_subject,
+                predicate=macro_predicate,
+                value=float(match.group(2)),
+                unit="per cent",
+                period=period_str,
+                scope=None,
+                qualifiers=qualifiers,
+                evidence=Evidence(
+                    document_id=page.document_id,
+                    page_number=page.page_number,
+                    text=match.group(0).strip(),
+                    document_name=page.filename,
+                ),
+                confidence=0.9,
+            ))
+
     # 2. Revenue from operations / services assertions:
     rev_pattern = re.compile(
         r"(revenue\s+from\s+operations\s+on\s+(standalone|consolidated)\s+basis\s+for\s+(FY\d{2,4})\s+stood\s+at\s+INR\s+([\d,]+\.?\d*)\s+million)",

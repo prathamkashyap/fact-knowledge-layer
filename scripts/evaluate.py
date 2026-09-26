@@ -60,7 +60,13 @@ def _norm(text: Any) -> str:
 
 
 def _val(value: Any) -> str:
-    """Stringify a claim value robustly (floats, ints, strings, None)."""
+    """Stringify a claim value robustly (floats, ints, strings, None).
+
+    Plain numeric strings are parsed as numbers first: DB relationship
+    rows carry fact values stringified with str(), so float 4.0 arrives
+    as "4.0" while gold records it as "4" — both must key identically,
+    exactly like a real float 4.0 does on the extraction side.
+    """
     if value is None:
         return ""
     if isinstance(value, float):
@@ -68,7 +74,10 @@ def _val(value: Any) -> str:
         if text.endswith(".0"):
             text = text[:-2]
         return text
-    return _norm(value)
+    text = str(value).strip()
+    if re.fullmatch(r"[+-]?\d+(?:\.\d+)?", text):
+        return _val(float(text))
+    return _norm(text)
 
 
 def claim_key(

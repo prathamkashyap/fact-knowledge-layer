@@ -250,6 +250,25 @@ def normalize_period(
         except ValueError:
             continue
 
+    # 4b. Month-year patterns ("September 2025", "Mar 2025"): normalize to
+    # the first of the month. Without this, the bare-year fallback below
+    # would collapse two different months of the same calendar year to the
+    # same key ("2025"), and they would masquerade as the same reporting
+    # period — which let rule 9 emit CONTRADICTS for March vs September
+    # 2025 inflation figures (Week 3 Cluster G).
+    month_year_match = re.fullmatch(
+        r"(January|February|March|April|May|June|July|August|September"
+        r"|October|November|December"
+        r"|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec"
+        r")\.?\s+(20\d{2})",
+        date_str,
+        re.IGNORECASE,
+    )
+    if month_year_match:
+        month_num = datetime.strptime(month_year_match.group(1)[:3], "%b").month
+        year = month_year_match.group(2)
+        return (f"{year}-{month_num:02d}-01", "date" if raw else "as_of")
+
     # 5. As of year mention: "as of the 2022 Prospectus", "2022"
     year_match = re.search(r'\b(20\d{2})\b', target)
     if year_match:

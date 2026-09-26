@@ -128,10 +128,12 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
         assert stats["total_pages"] == 511
         # Post-dedup baseline (Defect A fixed): 13 raw rows collapse to 8
         # unique claims; Week 3 Cluster G adds 7 macro-indicator claims
-        # (ex-017..ex-020, ex-022..ex-024) for 15 total. Relationship
-        # cross-products collapse to 13 pairs (3 baseline + 10 Cluster G).
-        assert stats["total_facts"] == 15
-        assert stats["total_relationships"] == 13
+        # (ex-017..ex-020, ex-022..ex-024); Week 4 adds 6 comparative
+        # financial-highlights claims (ex-009, ex-010, ex-011, ex-025..ex-027)
+        # for 21 total. Relationship cross-products collapse to 24 pairs
+        # (3 baseline + 10 Cluster G + 11 Week 4 p.22 pairs).
+        assert stats["total_facts"] == 21
+        assert stats["total_relationships"] == 24
 
         # Ensure documents > 0 and facts > 0 per acceptance criteria
         assert stats["total_documents"] > 0
@@ -139,30 +141,35 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
 
         # Facts must have non-empty grounded evidence
         facts = db.get_facts(limit=100)
-        assert len(facts) == 15
+        assert len(facts) == 21
         for f in facts:
             assert f.evidence.text
             assert f.evidence.document_name
             assert f.evidence.page_number > 0
 
-        # Relationships: 9 RECONCILABLE (3 baseline + 3 period-difference
-        # rule-8b pairs + 3 forecast/actual pairs) and 4 UNCERTAIN
+        # Relationships: 20 RECONCILABLE (3 baseline + 3 period-difference
+        # rule-8b pairs + 3 forecast/actual pairs + 11 Week 4 p.22 pairs:
+        # 4 scope-rule and 2 cross-period on the revenue group, 4 scope-rule
+        # and 2 cross-period on the new loss group) and 4 UNCERTAIN
         # (core/headline series missing period context) — zero CONTRADICTS,
         # zero CORROBORATES.
         rels = db.get_relationships(limit=100)
-        assert len(rels) == 13
+        assert len(rels) == 24
         reconcilable = [r for r in rels if r["relationship"] == "RECONCILABLE"]
         uncertain = [r for r in rels if r["relationship"] == "UNCERTAIN"]
-        assert len(reconcilable) == 9
+        assert len(reconcilable) == 20
         assert len(uncertain) == 4
         assert [r for r in rels if r["relationship"] == "CONTRADICTS"] == []
         assert [r for r in rels if r["relationship"] == "CORROBORATES"] == []
         assert len([r for r in reconcilable if "vintage" in r["reason"].lower()]) == 1
         assert len([r for r in reconcilable if "temporal progression" in r["reason"].lower()]) == 1
+        # Scope rule (rule 6): 1 baseline revenue pair + 3 new revenue
+        # cross-scope pairs + 4 new loss cross-scope pairs.
         assert len([r for r in reconcilable if "standalone" in r["reason"].lower()
-                    and "consolidated" in r["reason"].lower()]) == 1
-        # Rule 8b: different both-known reporting periods explain the value gap.
-        assert len([r for r in reconcilable if "reporting periods" in r["reason"].lower()]) == 3
+                    and "consolidated" in r["reason"].lower()]) == 8
+        # Rule 8b: different both-known reporting periods explain the value gap
+        # (3 baseline inflation pairs + 2 revenue YoY pairs + 2 loss YoY pairs).
+        assert len([r for r in reconcilable if "reporting periods" in r["reason"].lower()]) == 7
         # Rule 3: forecast/actual pairs keep their projection reason.
         assert len([r for r in reconcilable if "forward-looking projections" in r["reason"].lower()]) == 3
         # The 4 UNCERTAIN rows are the missing-period core/headline pairs.

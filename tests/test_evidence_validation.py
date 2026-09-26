@@ -113,10 +113,11 @@ def test_all_pipeline_evidence_verifies_on_real_pdf():
         result = process_document_pipeline(
             pdf_path=str(STARTER_AR), provider=None, db=db, reasoning_mode="heuristic",
         )
-        # The Delhivery annual report alone contributes 6 facts
-        # (2 revenue + 4 director events after dedup); the 8-fact corpus
-        # count includes the other 5 demo PDFs.
-        assert result["facts_count"] == 6
+        # The Delhivery annual report alone contributes 12 facts
+        # (2 FY24 revenue + 4 director events after dedup, plus the 6
+        # Week 4 comparative-highlights claims: 2 FY23 revenue + 4 loss);
+        # the corpus count includes the other 5 demo PDFs.
+        assert result["facts_count"] == 12
         assert result["evidence_rejected_count"] == 0, (
             "heuristic-path evidence is a slice of the cited page's own text "
             "and must always verify"
@@ -127,7 +128,7 @@ def test_all_pipeline_evidence_verifies_on_real_pdf():
         doc = parse_pdf_document(str(STARTER_AR))
         pages_by_number = {p.page_number: p.raw_text for p in doc.pages}
         facts = db.get_facts(limit=500)
-        assert len(facts) == 6
+        assert len(facts) == 12
         for f in facts:
             page_text = pages_by_number.get(f.evidence.page_number, "")
             assert verify_evidence_on_page(f.evidence.text, page_text), (

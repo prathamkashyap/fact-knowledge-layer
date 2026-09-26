@@ -81,21 +81,29 @@ def test_revenue_pair_reconcilable_by_scope_end_to_end():
         )
         facts = db.get_facts(limit=500)
         revenue = [f for f in facts if f.predicate == "revenue"]
-        assert len(revenue) == 2
-        scopes = sorted(f.scope for f in revenue)
-        assert scopes == ["consolidated", "standalone"]
-        assert all(f.period == "FY24" for f in revenue)
+        # Week 4: the group grows from 2 to 4 (FY24 pair + FY23 comparatives).
+        assert len(revenue) == 4
+        fy24 = [f for f in revenue if f.period == "FY24"]
+        assert sorted(f.scope for f in fy24) == ["consolidated", "standalone"]
+        fy23 = [f for f in revenue if f.period == "FY23"]
+        assert sorted(f.scope for f in fy23) == ["consolidated", "standalone"]
+        assert all(f.unit == "INR million" for f in revenue)
 
         rels = db.get_relationships(limit=100)
         rev_pairs = [
             r for r in rels
             if r["fa_predicate"] == "revenue" and r["fb_predicate"] == "revenue"
         ]
-        assert len(rev_pairs) == 1, "exactly one revenue comparison pair"
-        pair = rev_pairs[0]
-        assert pair["relationship"] == "RECONCILABLE", (
-            f"standalone vs consolidated must be RECONCILABLE by scope, "
-            f"got {pair['relationship']}: {pair['reason']}"
+        # C(4,2) = 6 revenue comparison pairs, all RECONCILABLE.
+        assert len(rev_pairs) == 6, "all six revenue pairs must surface"
+        assert all(r["relationship"] == "RECONCILABLE" for r in rev_pairs), (
+            "revenue group pairs are same-table scope/YoY progressions: "
+            + "; ".join(f"{r['fa_value']}x{r['fb_value']}={r['relationship']}"
+                        for r in rev_pairs)
+        )
+        pair = next(
+            r for r in rev_pairs
+            if {str(r["fa_value"]), str(r["fb_value"])} == {"74540.82", "81415.38"}
         )
         reason_l = pair["reason"].lower()
         assert "standalone" in reason_l

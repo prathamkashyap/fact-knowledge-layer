@@ -32,7 +32,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Verify regression test suite (198+ passing)
+# 3. Verify regression test suite (266 passing)
 python -m pytest tests/ -q
 
 # 4. Load the bundled starter demo database
@@ -242,7 +242,7 @@ python -m pytest tests/ -q
 ```
 
 ```
-===================== 204 passed, 7 warnings in ~70s =====================
+===================== 266 passed, 7 warnings in ~95s =====================
 ```
 
 | Test File | Count | Coverage Focus |
@@ -254,6 +254,12 @@ python -m pytest tests/ -q
 | `tests/test_gate5.py` | 12 | FastAPI endpoints, health checks, persistence operations, UI serving. |
 | `tests/test_pipeline_integration.py` | 28 | End-to-end multi-document pipeline runs, database round-trips, serialization. |
 | `tests/test_demo_loader.py` | 6 | Demo path resolution, starter dataset discovery, clean error handling, e2e smoke load. |
+| `tests/test_macro_indicators.py` | 22 | Named Cluster G gold regressions (ex-017..ex-024), negative grammar guards, corpus-wide blast-radius test, period-reconciliation reasoning. |
+| `tests/test_evaluate.py` | 11 | Gold-set integrity (counts, ids, verdicts) and scoring-key semantics. |
+| `tests/test_dedup.py` | 7 | Duplicate fact folding and provenance qualifiers (Week 2 Defect A). |
+| `tests/test_evidence_validation.py` | 7 | Verbatim evidence grounding against the cited page before persistence. |
+| `tests/test_scope_extraction.py` | 7 | Standalone/consolidated scope and fiscal-year capture (Week 2 L1). |
+| `tests/test_status_reasoning.py` | 8 | Resigned→ceased temporal progression rule (Week 2 Defect B). |
 | `tests/test_table_regression.py` | — | Multi-column table layout regression fixtures. |
 
 ---
@@ -273,9 +279,9 @@ python -m pytest tests/ -q
 In the spirit of complete engineering honesty, the following known gaps are documented:
 
 1. **Table Layout Detachment:**
-   Complex financial tables with multi-tier column headers can detach from numerical cells during raw PyMuPDF text extraction.
+   Complex financial tables with multi-tier column headers can detach from numerical cells during raw PyMuPDF text extraction. (Note: a Week 3 audit confirmed 0 of the 13 tracked recall misses were caused by page selection or table layout — all 13 were sentence-pattern gaps — so table work is recall-neutral for the current harness, but the UI/extraction limitation itself remains.)
 2. **Extraction Recall:**
-   The offline extractor is precision-first: of 21 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 8 — the remaining 13 are deliberate recall misses (e.g. comparative-period figures, table-only claims) tracked by the evaluation harness rather than pattern-guessed.
+   The offline extractor is precision-first: of 24 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 15 — the remaining 9 are deliberate recall misses (comparative-period figures, loss wording, textual as-of dates, associated-status updates, director appointments, an acronym/footnote GDP claim, and `Rs./Cr` KPI wording) tracked by the evaluation harness rather than pattern-guessed.
 
 ### Fixed in Week 2 (for the record)
 
@@ -295,13 +301,22 @@ A formal baseline audit was established before polish work commenced. Full artif
 - [`docs/validation/baseline_metrics.json`](docs/validation/baseline_metrics.json): Processing latencies and candidate page rates.
 
 Week 2 added a quantitative harness with hand-verified gold sets:
-- [`scripts/evaluate.py`](scripts/evaluate.py): fresh-run evaluation over the 6-PDF corpus; writes a diffable snapshot to `docs/evaluation/results.json`.
-- [`docs/evaluation/extraction_gold.json`](docs/evaluation/extraction_gold.json): 21 hand-verified gold claims (8 current-pipeline + 13 deliberate recall misses).
-- [`docs/evaluation/relationship_gold.json`](docs/evaluation/relationship_gold.json): 9 source-verified pair expectations (3 label-expectation + 6 must-stay-absent).
+- [`scripts/evaluate.py`](scripts/evaluate.py): fresh-run evaluation over the 6-PDF corpus; writes a diffable snapshot to `docs/evaluation/results.json` (latest run + bounded history of labeled runs).
+- [`docs/evaluation/extraction_gold.json`](docs/evaluation/extraction_gold.json): 24 hand-verified gold claims (8 current-pipeline + 16 deliberate recall misses; `gold_version: week3-phase0`).
+- [`docs/evaluation/relationship_gold.json`](docs/evaluation/relationship_gold.json): 19 source-verified pair expectations (13 label-expectation + 6 must-stay-absent; `gold_version: week3-phase0`).
 
 **Baseline relationship composition (Week 1 archive, 9 rows):** of the 9 baseline relationship rows, all 3 `CONTRADICTS` were artifacts (Defect B, **0 genuine**); 4 `CORROBORATES` rows were same-document duplicate-extraction artifacts (Defect A); the GDP estimate-vintage `RECONCILABLE` was the genuine correct classification; and the revenue `UNCERTAIN` (missing scope context) became `RECONCILABLE` after Week 2 scope/context capture.
 
-**Gold-set scope note:** the relationship gold set contains 9 source-verifiable expectations for the current corpus; expanding it beyond this (e.g. toward a 20–30 quantity target) requires additional cross-document source material rather than synthetic cases — padding with unverifiable entries would weaken the evaluation.
+**Gold-set scope note:** the relationship gold set contains 19 source-verifiable expectations for the current corpus; expanding it further requires additional cross-document source material rather than synthetic cases — padding with unverifiable entries would weaken the evaluation. Methodology rule (Week 3): pair labels are assigned only after source-verifying each pair against the PDFs; copying the reasoner's own output into the gold set is explicitly banned, and a numerical match across two different series (e.g. headline vs. core inflation) must never be lazily labeled CORROBORATES.
+
+### Week 3 Cluster G (gold_version week3-phase0)
+
+A corpus-wide audit classified all 16 remaining `recall_miss` gold claims: **0 candidate-page misses, 0 table-layout misses, 13/13 sentence-pattern gaps**, clustered by cause (macro indicators, comparative periods, loss wording, textual as-of, associated status, appointments, GDP acronym, KPI units). Phase 0/1 closed the macro-indicator cluster:
+
+- **Gold completeness first:** a blast-radius scan of all candidate pages found 3 additional source-verified claims beyond the original four (RBI annual `4.6 per cent in 2024-25`, RBI March 2025 `3.3 per cent`, IMF FY2026/27 projection `4 per cent`), and corrected ex-020's inferred period to the source wording (`September`). The induced matcher pairs were enumerated and source-verified (rel-010..rel-019: 6 RECONCILABLE, 4 UNCERTAIN) *before* any code changed. The `week2-frozen` results snapshot was left untouched.
+- **Closed extraction map:** a four-indicator, one-grammar family (`private consumption growth`, `headline inflation`, `core inflation`, `unemployment` with an `(at|to) <number> percent` anchor) extracts exactly those 7 claims and nothing else — guarded by named per-claim regressions, negative-grammar guards, and a corpus-wide blast-radius test asserting the exact claim set.
+- **Reasoner rule 8b (period reconciliation):** numeric same-metric pairs whose *both-known* reporting periods differ classify RECONCILABLE with the period difference stated (e.g. September 2025 vs. the 2024-25 annual average). Same-period differences still reach the contradiction rule; forecast pairs still reconcile via the existing forecast rule.
+- **Two latent bugs found by the new pairs and fixed:** `normalize_period` collapsed `September 2025` and `March 2025` to the same bare-year key `2025` (which made two different months read as the same period); and the evaluator's claim-key stringifier keyed DB-row `str(4.0)` differently from gold `"4"`. Both had named regression tests added.
 
 ### Before / After (Week 2)
 
@@ -317,29 +332,43 @@ Week 2 added a quantitative harness with hand-verified gold sets:
 | Facts (clean run) | 13 (5 duplicate) | **8** |
 | Relationships (clean run) | 9 (duplicate-inflated) | **3** (all RECONCILABLE) |
 
+### Before / After (Week 3 Cluster G)
+
+| Metric | Post-Week-2 (`week2-frozen`) | Post-Cluster-G (`week3-cluster-g`) |
+|---|---|---|
+| Extraction precision | 1.0000 | **1.0000** |
+| Extraction recall | 0.3810 | **0.6250** |
+| Extraction F1 | 0.5517 | **0.7692** |
+| Period capture | 1.00 | **1.00** |
+| Scope capture | 1.00 | **1.00** |
+| Relationship accuracy | 1.0000 (9/9) | **1.0000 (19/19)** |
+| Absent-expectation compliance | 1.0000 | **1.0000** |
+| Facts (clean run) | 8 | **15** |
+| Relationships (clean run) | 3 (all RECONCILABLE) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS, 0 CORROBORATES) |
+
 Reproduce with:
 
 ```bash
-python scripts/evaluate.py            # fresh run; latest result in docs/evaluation/results.json
+python scripts/evaluate.py --label <name>   # fresh run; appends to history in docs/evaluation/results.json
 ```
 
 ### Clean Ingest Summary
 
-| Metric | Week 1 Baseline | Post-Week 2 |
-|---|---|---|
-| Ingested Documents | **6** | **6** |
-| Pages Parsed | **511** | **511** |
-| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) |
-| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) |
-| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~35–44 s includes gold matching) |
+| Metric | Week 1 Baseline | Post-Week 2 | Post-Week 3 (Cluster G) |
+|---|---|---|---|
+| Ingested Documents | **6** | **6** | **6** |
+| Pages Parsed | **511** | **511** | **511** |
+| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) | **15** (deduplicated) |
+| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) |
+| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~36–55 s includes gold matching) |
 
-*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 8 verified facts and 3 grounded relationships; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
+*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 15 verified facts and 13 grounded relationships at precision 1.0000; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
 
 ---
 
 ## Future Work
 
-- **Extraction Recall:** 13 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) are tracked but not yet extracted — comparative-period figures, table-only claims, and other precision-first skips. Raise recall against the harness without regressing precision from 1.0000.
+- **Extraction Recall:** 9 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) remain unextracted: comparative-period figures (ex-009/010), standalone loss wording (ex-011), textual as-of dates (ex-012), associated-status updates (ex-013), director appointments (ex-014/015), the acronym/footnote GDP claim (ex-016), and `Rs./Cr` KPI wording (ex-021). Raise recall against the harness without regressing precision from 1.0000 — each cluster ships with source-verified gold first, a named regression, and a complete passing eval, per the Cluster G methodology.
 - **Table Layout Detachment:** improve structured extraction for multi-tier financial tables (remaining known limitation above).
 - **Concrete LLM Provider:** Wire a tested, provider-neutral client (Anthropic Claude, MiMo, or local Ollama) into the existing `LLMProvider` ABC for generalized table extraction. The provider interface exists; no live provider is currently configured or enabled.
 

@@ -248,6 +248,80 @@ def extract_heuristic_facts_from_page(page: PageObject) -> List[Fact]:
             confidence=0.92,
         ))
 
+    # 2d. Comparative financial-highlights sentences (Week 4 audit cluster):
+    # AR FY24 p.22 pairs every highlights figure with its prior-year value
+    # via "as against ₹W million for FYyy", and states the loss figures as
+    # "the loss for FYxx stood at ₹V million". Six source-verified claims
+    # live in these two sentence shapes (ex-009, ex-010, ex-011 and the
+    # three induced standalone/consolidated loss truths); corpus-wide the
+    # anchors fire nowhere else (verified: p.36 uses "from ₹.. million",
+    # comparative prose uses per-cent/lakh units, the prospectus uses
+    # "has improved from").
+    comp_scope_phrase = re.compile(r"\bon\s+(standalone|consolidated)\s+basis\b", re.IGNORECASE)
+
+    def _nearest_scope_before(pos: int) -> Optional[str]:
+        found = None
+        for m in comp_scope_phrase.finditer(full_clean_text[:pos]):
+            found = m.group(1).lower()
+        return found
+
+    rev_comp = re.compile(
+        r"(revenue\s+from\s+operations\s+on\s+(standalone|consolidated)\s+basis"
+        r"\s+for\s+(FY\d{2,4})\s+stood\s+at\s+(?:INR|₹)\s*[\d,]+\.?\d*\s+million"
+        r"\s+as\s+against\s+(?:INR|₹)\s*([\d,]+\.?\d*)\s+million\s+for\s+(FY\d{2,4}))",
+        re.IGNORECASE,
+    )
+    for match in rev_comp.finditer(full_clean_text):
+        val = float(match.group(4).replace(",", ""))
+        facts.append(Fact(
+            subject=f"{_extract_entity_from_context(page.filename)} revenue",
+            predicate="revenue",
+            value=val,
+            unit="INR million",
+            period=match.group(5).upper(),
+            scope=match.group(2).lower(),
+            qualifiers=[],
+            evidence=Evidence(
+                document_id=page.document_id,
+                page_number=page.page_number,
+                text=match.group(1).strip(),
+                document_name=page.filename,
+            ),
+            confidence=0.95,
+        ))
+
+    loss_comp = re.compile(
+        r"((?:the\s+)?loss\s+for\s+(FY\d{2,4})\s+stood\s+at\s+(?:INR|₹)\s*([\d,]+\.?\d*)\s+million"
+        r"(?:\s+as\s+against\s+(?:INR|₹)\s*([\d,]+\.?\d*)\s+million\s+for\s+(FY\d{2,4}))?)",
+        re.IGNORECASE,
+    )
+    for match in loss_comp.finditer(full_clean_text):
+        entity = _extract_entity_from_context(page.filename)
+        scope = _nearest_scope_before(match.start())
+        # Scope comes from the paired revenue bullet on the same page
+        # ("...on standalone basis... Whereas the loss for FY24 stood at"),
+        # never from the loss clause itself.
+        losses = [(match.group(3), match.group(2))]
+        if match.group(4):
+            losses.append((match.group(4), match.group(5)))
+        for raw_value, raw_period in losses:
+            facts.append(Fact(
+                subject=f"{entity} loss",
+                predicate="loss",
+                value=float(raw_value.replace(",", "")),
+                unit="INR million",
+                period=raw_period.upper(),
+                scope=scope,
+                qualifiers=[],
+                evidence=Evidence(
+                    document_id=page.document_id,
+                    page_number=page.page_number,
+                    text=match.group(1).strip(),
+                    document_name=page.filename,
+                ),
+                confidence=0.95,
+            ))
+
     # 3. Net Loss / Profit:
     loss_patterns = [
         re.compile(r"(loss\s+for\s+the\s+year\s+was\s+INR\s+([\d,]+\.?\d*)\s+million)", re.IGNORECASE),

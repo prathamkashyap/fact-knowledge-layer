@@ -187,8 +187,9 @@ def test_delhivery_annual_report_deduplicates_director_facts(tmp_path):
         # 11 raw rows pre-fix -> 6 unique claims post-fix
         # (revenue x2, Suvir resigned, Suvir ceased, Colleran ceased, Barasia
         # ceased); Week 4 adds 6 comparative-highlights claims
-        # (2 revenue FY23 + 4 loss) for 12 total.
-        assert len(facts) == 12
+        # (2 revenue FY23 + 4 loss); Week 5 adds the 2 director-appointment
+        # claims (ex-014 Ghose p.33/p.40 fold, ex-015 Sundararajan) for 14.
+        assert len(facts) == 14
 
         ceased = [f for f in facts if f.predicate == "board status"
                   and f.value.strip().lower() == "ceased to be a director"]

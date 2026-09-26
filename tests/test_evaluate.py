@@ -39,12 +39,13 @@ from evaluate import (  # noqa: E402
 def test_extraction_gold_structure():
     gold = _load_gold(EXTRACTION_GOLD)
     items = gold["items"]
-    assert len(items) == 21
+    assert gold["gold_version"] == "week3-phase0"
+    assert len(items) == 24
 
     current = [g for g in items if g["source"] == "current_pipeline"]
     misses = [g for g in items if g["source"] == "recall_miss"]
     assert len(current) == 8
-    assert len(misses) == 13
+    assert len(misses) == 16
 
     ids = [g["id"] for g in items]
     assert len(ids) == len(set(ids)), "gold item ids must be unique"
@@ -67,11 +68,12 @@ def test_extraction_gold_structure():
 def test_relationship_gold_structure():
     gold = _load_gold(RELATIONSHIP_GOLD)
     items = gold["items"]
-    assert len(items) == 9
+    assert gold["gold_version"] == "week3-phase0"
+    assert len(items) == 19
 
     label_items = [g for g in items if g["expectation"] == "label"]
     absent_items = [g for g in items if g["expectation"] == "absent"]
-    assert len(label_items) == 3
+    assert len(label_items) == 13
     assert len(absent_items) == 6
 
     for g in items:
@@ -82,10 +84,10 @@ def test_relationship_gold_structure():
         else:
             assert g["expected"] == "ABSENT"
 
-    # Phase 0 verdicts: exactly one genuine pair among the baseline rows
-    genuine = [g for g in items if g.get("verdict") == "genuine"]
-    assert len(genuine) == 1
-    assert genuine[0]["id"] == "rel-004"
+    # Verdicts: rel-004 is the one genuine baseline pair; rel-010..rel-019
+    # are the ten source-verified Cluster G pairs added in Week 3 Phase 0.
+    genuine = {g["id"] for g in items if g.get("verdict") == "genuine"}
+    assert genuine == {"rel-004"} | {f"rel-{i:03d}" for i in range(10, 20)}
 
     audit = gold["current_pipeline_rows"]
     assert audit["summary"]["rows"] == 9

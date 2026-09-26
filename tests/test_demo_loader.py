@@ -127,9 +127,11 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
         assert stats["total_documents"] == 6
         assert stats["total_pages"] == 511
         # Post-dedup baseline (Defect A fixed): 13 raw rows collapse to 8
-        # unique claims; relationship cross-products collapse to 3 pairs.
-        assert stats["total_facts"] == 8
-        assert stats["total_relationships"] == 3
+        # unique claims; Week 3 Cluster G adds 7 macro-indicator claims
+        # (ex-017..ex-020, ex-022..ex-024) for 15 total. Relationship
+        # cross-products collapse to 13 pairs (3 baseline + 10 Cluster G).
+        assert stats["total_facts"] == 15
+        assert stats["total_relationships"] == 13
 
         # Ensure documents > 0 and facts > 0 per acceptance criteria
         assert stats["total_documents"] > 0
@@ -137,24 +139,33 @@ def test_demo_loader_end_to_end_smoke(monkeypatch, tmp_path):
 
         # Facts must have non-empty grounded evidence
         facts = db.get_facts(limit=100)
-        assert len(facts) == 8
+        assert len(facts) == 15
         for f in facts:
             assert f.evidence.text
             assert f.evidence.document_name
             assert f.evidence.page_number > 0
 
-        # Relationships: all three are RECONCILABLE after Phases 3-5
-        # (GDP estimate vintage, resigned-vs-ceased temporal progression,
-        # standalone-vs-consolidated scope) — zero CONTRADICTS, zero UNCERTAIN.
+        # Relationships: 9 RECONCILABLE (3 baseline + 3 period-difference
+        # rule-8b pairs + 3 forecast/actual pairs) and 4 UNCERTAIN
+        # (core/headline series missing period context) — zero CONTRADICTS,
+        # zero CORROBORATES.
         rels = db.get_relationships(limit=100)
-        assert len(rels) == 3
+        assert len(rels) == 13
         reconcilable = [r for r in rels if r["relationship"] == "RECONCILABLE"]
-        assert len(reconcilable) == 3
+        uncertain = [r for r in rels if r["relationship"] == "UNCERTAIN"]
+        assert len(reconcilable) == 9
+        assert len(uncertain) == 4
         assert [r for r in rels if r["relationship"] == "CONTRADICTS"] == []
-        assert [r for r in rels if r["relationship"] == "UNCERTAIN"] == []
+        assert [r for r in rels if r["relationship"] == "CORROBORATES"] == []
         assert len([r for r in reconcilable if "vintage" in r["reason"].lower()]) == 1
         assert len([r for r in reconcilable if "temporal progression" in r["reason"].lower()]) == 1
         assert len([r for r in reconcilable if "standalone" in r["reason"].lower()
                     and "consolidated" in r["reason"].lower()]) == 1
+        # Rule 8b: different both-known reporting periods explain the value gap.
+        assert len([r for r in reconcilable if "reporting periods" in r["reason"].lower()]) == 3
+        # Rule 3: forecast/actual pairs keep their projection reason.
+        assert len([r for r in reconcilable if "forward-looking projections" in r["reason"].lower()]) == 3
+        # The 4 UNCERTAIN rows are the missing-period core/headline pairs.
+        assert len([r for r in uncertain if "ambiguous" in r["reason"].lower()]) == 4
     finally:
         db.close()

@@ -185,8 +185,10 @@ def test_delhivery_annual_report_deduplicates_director_facts(tmp_path):
 
         facts = db.get_facts(limit=500)
         # 11 raw rows pre-fix -> 6 unique claims post-fix
-        # (revenue x2, Suvir resigned, Suvir ceased, Colleran ceased, Barasia ceased)
-        assert len(facts) == 6
+        # (revenue x2, Suvir resigned, Suvir ceased, Colleran ceased, Barasia
+        # ceased); Week 4 adds 6 comparative-highlights claims
+        # (2 revenue FY23 + 4 loss) for 12 total.
+        assert len(facts) == 12
 
         ceased = [f for f in facts if f.predicate == "board status"
                   and f.value.strip().lower() == "ceased to be a director"]
@@ -197,9 +199,10 @@ def test_delhivery_annual_report_deduplicates_director_facts(tmp_path):
         assert by_subject["Donald Francis Colleran"].evidence.page_number == 40
         assert by_subject["Sandeep Kumar Barasia"].evidence.page_number == 40
 
-        # Revenue pair must remain two distinct facts (different values)
+        # Revenue facts remain distinct (different values): FY24 standalone +
+        # FY24 consolidated + the two Week 4 FY23 comparatives.
         revenue = [f for f in facts if f.predicate == "revenue"]
-        assert len(revenue) == 2
+        assert len(revenue) == 4
 
         # Suvir resigned <-> Suvir ceased: exactly one comparison row now
         # (pre-fix: 3 rows from 1 x 3 cross product). Label is asserted in

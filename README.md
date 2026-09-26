@@ -32,7 +32,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Verify regression test suite (282 passing)
+# 3. Verify regression test suite (300 passing)
 python -m pytest tests/ -q
 
 # 4. Load the bundled starter demo database
@@ -242,7 +242,7 @@ python -m pytest tests/ -q
 ```
 
 ```
-===================== 282 passed, 7 warnings in ~130s =====================
+===================== 300 passed, 7 warnings in ~130s =====================
 ```
 
 | Test File | Count | Coverage Focus |
@@ -256,6 +256,7 @@ python -m pytest tests/ -q
 | `tests/test_demo_loader.py` | 6 | Demo path resolution, starter dataset discovery, clean error handling, e2e smoke load. |
 | `tests/test_macro_indicators.py` | 22 | Named Cluster G gold regressions (ex-017..ex-024), negative grammar guards, corpus-wide blast-radius test, period-reconciliation reasoning. |
 | `tests/test_comparative_highlights.py` | 16 | Named Cluster A+B gold regressions (ex-009/010/011/025/026/027), negative grammar guards, corpus-wide blast-radius test, relationship pair-label guard. |
+| `tests/test_director_appointments.py` | 18 | Named ex-014/ex-015 gold regressions against real source text, dedup fold guards, negative grammar guards, corpus-wide blast-radius test, no-pairs matcher guards. |
 | `tests/test_evaluate.py` | 11 | Gold-set integrity (counts, ids, verdicts) and scoring-key semantics. |
 | `tests/test_dedup.py` | 7 | Duplicate fact folding and provenance qualifiers (Week 2 Defect A). |
 | `tests/test_evidence_validation.py` | 7 | Verbatim evidence grounding against the cited page before persistence. |
@@ -282,7 +283,7 @@ In the spirit of complete engineering honesty, the following known gaps are docu
 1. **Table Layout Detachment:**
    Complex financial tables with multi-tier column headers can detach from numerical cells during raw PyMuPDF text extraction. (Note: a Week 3 audit confirmed 0 of the 13 tracked recall misses were caused by page selection or table layout — all 13 were sentence-pattern gaps — so table work is recall-neutral for the current harness, but the UI/extraction limitation itself remains.)
 2. **Extraction Recall:**
-   The offline extractor is precision-first: of 27 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 21 — the remaining 6 are deliberate recall misses tracked by the evaluation harness rather than pattern-guessed: textual effective-date extraction (ex-012), associated-status extraction (ex-013), director-appointment extraction (ex-014/015), GDP full-form/footnote extraction (ex-016), and EBITDA abbreviated-currency extraction (ex-021).
+   The offline extractor is precision-first: of 27 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 23 — the remaining 4 are deliberate recall misses tracked by the evaluation harness rather than pattern-guessed: textual effective-date extraction (ex-012), associated-status extraction (ex-013), GDP full-form/footnote extraction (ex-016), and EBITDA abbreviated-currency extraction (ex-021). (Director-appointment extraction ex-014/015 was closed in Week 5 / Recall Cycle 3.)
 
 ### Fixed in Week 2 (for the record)
 
@@ -332,6 +333,38 @@ A source-verification audit of the **9 remaining `recall_miss` claims** (ex-009/
 - **Deferred matcher hazard (textual effective-date extraction, ex-012):** blast-radius analysis showed a naive textual `as_of` extractor would produce a degenerate relationship key colliding with an existing must-stay-absent expectation (`rel-003`) — a matcher-level semantics problem, not an extraction problem. The cluster is deliberately deferred until the matcher skips same-document identical relationship keys; this is the gold-first process catching a hazard *before* code, not after.
 
 The five remaining deferred clusters are tracked by descriptive name rather than letter: **textual effective-date extraction** (ex-012, deferred on the matcher hazard above), **associated-status extraction** (ex-013), **director-appointment extraction** (ex-014/015, blast radius also induces 3 further source-verified gold claims), **GDP full-form/footnote extraction** (ex-016, blast radius dedupe-safe with 2 induced pairs), and **EBITDA abbreviated-currency extraction** (ex-021, blast radius exactly 1 hit).
+
+> **Historical vs. current state:** the paragraph above is the Week 4 record and is preserved as it was true at that point. Week 5 closed the director-appointment cluster, so the *current* state is **four remaining misses** — see the Week 5 section below and the current-state sections (Known Limitations, Future Work).
+
+### Week 5 / Recall Cycle 3 — Director Appointment Extraction (gold unchanged: week4-phase2)
+
+> **Iteration naming:** the branch is `improve/fkl-week5-recall-next`; the work itself is **Week 5 / Recall Cycle 3 — Director Appointment Extraction**. The evaluation label is `week5-director-appointments`. Gold sets were not touched (`extraction_gold.json` stays at 27, `relationship_gold.json` stays at 30, `gold_version: week4-phase2`) because the selected cluster's entire blast radius was already golded.
+
+An audit of the **6 remaining `recall_miss` claims** (ex-012/013/014/015/016/021) re-verified each against its source PDF and confirmed all gold metadata was already correct, then ran corpus-wide blast-radius scans across all five candidate causes. The selected cluster — **director-appointment extraction (ex-014/ex-015)** — is a bounded two-claim sentence family with exactly 4 corpus hits (annual report p.33 ×2, p.40 ×2) folding to 2 canonical facts, no induced relationship pairs, and no gold expansion:
+
+- **Implementation without architectural change:** a self-contained section 4b in the heuristic pipeline extracts `was appointed as Non-Executive Independent Director [for a period of N years] with effect from <Month DD, YYYY>` sentences as `board status` facts with `as_of` dates and optional term qualifiers. The emitted value conforms to the existing gold definition (`appointed as Non-Executive Independent Director`) — when the first eval run exposed a value-prefix mismatch, the extractor was changed to match gold, not the reverse.
+- **Bounded blast radius:** the role slot plus date slot anchors exclude officer appointments, committee memberships (including one for the same director on p.44), Monitoring-Agency engagements, remuneration revisions, and plain Non-Executive Director appointments. A corpus-wide test asserts exactly the 4 source sentences; 9 negative grammar guards cover each rejected shape.
+- **Dedup fold:** the p.40 "5 year term" repeats fold into the p.33 canonical fact (fingerprint excludes qualifiers); the canonical claim carries no term qualifier and records `duplicate-evidence: p.40`.
+- **No relationship movement:** the two claims are singleton subjects under the matcher's subject-scoped grouping, so the pair set is untouched — relationship gold stays at 30 (24 label + 6 absent) and relationship rows stay at 24.
+- **Deferred matcher hazard unchanged (ex-012):** the same-document degenerate-key issue identified in Week 4 is deliberately not addressed in this cycle; it belongs to a future matcher-focused cluster that must be independently audited first.
+
+### Before / After (Week 5 / Recall Cycle 3 — Director Appointments)
+
+| Metric | Post-Week 4 (`week4-p22-highlights`) | Post-Week 5 (`week5-director-appointments`) |
+|---|---|---|
+| Extraction precision | 1.0000 | **1.0000** |
+| Extraction recall | 0.7778 | **0.8519** |
+| Extraction F1 | 0.8750 | **0.9200** |
+| Period capture | 1.00 | **1.00** |
+| Scope capture | 1.00 | **1.00** |
+| Relationship accuracy | 1.0000 (30/30) | **1.0000 (30/30)** |
+| Absent-expectation compliance | 1.0000 | **1.0000** |
+| Extraction gold | 27 (16 recall_miss + 3 audit_addition + 8 current_pipeline) | **27** (unchanged — gold not modified this cycle) |
+| Relationship gold | 30 (24 label + 6 absent) | **30** (unchanged) |
+| Facts (clean run) | 21 | **23** |
+| Relationships (clean run) | 24 (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS, 0 CORROBORATES) | **24** (unchanged) |
+| Tests | 282 | **300** |
+| Remaining recall misses | 6 | **4** (ex-012, ex-013, ex-016, ex-021) |
 
 ### Before / After (Week 2)
 
@@ -386,21 +419,21 @@ python scripts/evaluate.py --label <name>   # fresh run; appends to history in d
 
 ### Clean Ingest Summary
 
-| Metric | Week 1 Baseline | Post-Week 2 | Post-Week 3 (Cluster G) | Post-Week 4 (Cluster A+B) |
-|---|---|---|---|---|
-| Ingested Documents | **6** | **6** | **6** | **6** |
-| Pages Parsed | **511** | **511** | **511** | **511** |
-| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) | **15** (deduplicated) | **21** (deduplicated) |
-| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) | **24** (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) |
-| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~29–55 s includes gold matching) |
+| Metric | Week 1 Baseline | Post-Week 2 | Post-Week 3 (Cluster G) | Post-Week 4 (Cluster A+B) | Post-Week 5 (Director Appointments) |
+|---|---|---|---|---|---|
+| Ingested Documents | **6** | **6** | **6** | **6** | **6** |
+| Pages Parsed | **511** | **511** | **511** | **511** | **511** |
+| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) | **15** (deduplicated) | **21** (deduplicated) | **23** (deduplicated) |
+| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) | **24** (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) | **24** (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) |
+| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~29–55 s includes gold matching) | ~29 s (eval wall time ~29 s includes gold matching) |
 
-*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 21 verified facts and 24 grounded relationships at precision 1.0000; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
+*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 23 verified facts and 24 grounded relationships at precision 1.0000; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
 
 ---
 
 ## Future Work
 
-- **Extraction Recall:** 6 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) remain unextracted, each with a fully enumerated blast radius from the Week 4 audit: textual effective-date extraction (ex-012 — **deferred**: its induced relationship key collides with a must-stay-absent expectation, so the matcher's same-document degenerate-key semantics must be fixed first), associated-status extraction (ex-013), director-appointment extraction (ex-014/015 — blast radius also induces 3 further source-verified gold claims), GDP full-form/footnote extraction (ex-016 — blast radius dedupe-safe, induces 2 source-verified pairs), and EBITDA abbreviated-currency extraction (ex-021 — blast radius exactly 1 hit). Raise recall against the harness without regressing precision from 1.0000 — each cluster ships with source-verified gold first, a named regression, and a complete passing eval, per the Cluster G / Cluster A+B methodology.
+- **Extraction Recall:** 4 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) remain unextracted after Week 5 / Recall Cycle 3, each with a fully enumerated blast radius from the corpus-wide audits: textual effective-date extraction (ex-012 — **deferred**: its induced relationship key collides with a must-stay-absent expectation, so the matcher's same-document degenerate-key semantics must be fixed first — this belongs to a future matcher-focused cluster that must be independently audited before implementation), associated-status extraction (ex-013), GDP full-form/footnote extraction (ex-016 — blast radius dedupe-safe, induces 2 source-verified pairs), and EBITDA abbreviated-currency extraction (ex-021 — blast radius exactly 1 hit). (Director-appointment extraction ex-014/015 was closed in Week 5 with 2 claims extracted at precision 1.0000.) Raise recall against the harness without regressing precision from 1.0000 — each cluster ships with source-verified gold first, a named regression, and a complete passing eval, per the Cluster G / Cluster A+B / Director Appointments methodology.
 - **Table Layout Detachment:** improve structured extraction for multi-tier financial tables (remaining known limitation above).
 - **Concrete LLM Provider:** Wire a tested, provider-neutral client (Anthropic Claude, MiMo, or local Ollama) into the existing `LLMProvider` ABC for generalized table extraction. The provider interface exists; no live provider is currently configured or enabled.
 
@@ -413,6 +446,6 @@ In accordance with transparent engineering disclosure, development of this proje
 - **MiMo (`mimo-v2.5-free`):** Primary agent for initial Gates 0–2 scaffolding, PyMuPDF candidate scoring routines, and core unit test suites.
 - **GitHub Copilot:** Code completion and docstring typing assistance throughout development.
 - **Gemini 3.8 Flash High:** Architecture review, implementation of Gate 3–5 normalization, candidate matching, epistemic relationship reasoning heuristics, SQLite persistence, FastAPI routes, zero-build UI, baseline audit verification, and repository polish.
-- **MiMo (`mimo-v2.6-flash-free`):** Week 3 (Cluster G) — recall-miss audit, gold-completeness revision, macro-indicator extraction family, period-reconciliation reasoning, normalizer/evaluator bug fixes, and all accompanying tests and documentation sync. Week 4 / Recall Cycle 2 (Cluster A+B) — nine-claim source audit, blast-radius clustering, p.22 comparative financial-highlights extraction family, source-verified relationship gold expansion (19→30), and all accompanying tests and documentation sync. (Week 2 phase attribution not yet recorded here.)
+- **MiMo (`mimo-v2.6-flash-free`):** Week 3 (Cluster G) — recall-miss audit, gold-completeness revision, macro-indicator extraction family, period-reconciliation reasoning, normalizer/evaluator bug fixes, and all accompanying tests and documentation sync. Week 4 / Recall Cycle 2 (Cluster A+B) — nine-claim source audit, blast-radius clustering, p.22 comparative financial-highlights extraction family, source-verified relationship gold expansion (19→30), and all accompanying tests and documentation sync. Week 5 / Recall Cycle 3 (Director Appointments) — six-claim source audit, five-cause blast-radius clustering, bounded director-appointment extraction family (gold unchanged at 27/30), 18 new regression tests, eval record, and documentation sync. (Week 2 phase attribution not yet recorded here.)
 
 All architectural decisions, epistemic rules, test validations, and factual claims were verified and tested directly in local execution.

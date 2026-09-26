@@ -1,11 +1,17 @@
 {
-  "description": "Gold extraction set for the Fact Knowledge Layer starter corpus (6 PDFs). Every item was hand-verified against the source PDF text during Week 2 Phase 0/1. Items marked source=current_pipeline are unique true claims present in the Week 1 clean baseline run (13 raw rows, verified and deduplicated by hand). Items marked source=recall_miss are extractable claims found by manual reading that the pipeline currently does NOT surface — they exist so evaluation measures recall, not just precision. Week 3 Phase 0 (gold_version week3-phase0): revised for the macro-indicator (Cluster G) pattern blast radius — a corpus-wide scan of all candidate pages found 3 additional source-verified claims (ex-022..ex-024) beyond the original four, and ex-020's period was corrected to the source wording. The week2-frozen snapshot in results.json predates this revision and remains the immutable Week 2 baseline.",
-  "gold_version": "week3-phase0",
-  "revised_on": "2026-09-23",
-  "match_key": ["subject", "predicate", "value", "unit", "as_of"],
+  "description": "Gold extraction set for the Fact Knowledge Layer starter corpus (6 PDFs). Every item was hand-verified against the source PDF text during Week 2 Phase 0/1. Items marked source=current_pipeline are unique true claims present in the Week 1 clean baseline run (13 raw rows, verified and deduplicated by hand). Items marked source=recall_miss are extractable claims found by manual reading that the pipeline currently does NOT surface — they exist so evaluation measures recall, not just precision. Week 3 Phase 0 (gold_version week3-phase0): revised for the macro-indicator (Cluster G) pattern blast radius — a corpus-wide scan of all candidate pages found 3 additional source-verified claims (ex-022..ex-024) beyond the original four, and ex-020's period was corrected to the source wording. The week2-frozen snapshot in results.json predates this revision and remains the immutable Week 2 baseline. Week 4 Phase 2/3 audit (gold_version week4-phase2): gold-first recall audit of the 9 remaining recall_miss items. All 9 source-verified; the p.22 comparative financial-highlights sentence family (Cluster A+B) induces three additional true loss claims that are added as source=audit_addition (ex-025..ex-027), and ex-011's scope is corrected null->consolidated (the sentence is the consolidated bullet; the audited table's 'Loss for the year' consolidated column reads 2,491.86).",
+  "gold_version": "week4-phase2",
+  "revised_on": "2026-09-26",
+  "match_key": [
+    "subject",
+    "predicate",
+    "value",
+    "unit",
+    "as_of"
+  ],
   "match_notes": "Matching normalizes whitespace (strip/collapse, casefold) and stringifies numeric values. as_of is part of the key so status claims differing only by effective date (two distinct cessation sentences for one director) stay distinct, while evidence page is NOT part of the key — page-level repetition of an identical claim is exactly what Defect A duplicates look like. period and scope are recorded as source truth and reported as secondary capture metrics (period_capture, scope_capture); they are not part of the primary match key because the Week 1 extractor does not consistently populate them and Week 2 scope work (L1) is scored via scope_capture and the relationship gold set.",
   "corpus": "starter-datasets/india-macroeconomy (3 PDFs) + starter-datasets/delhivery (3 PDFs)",
-  "verified_on": "2026-09-23",
+  "verified_on": "2026-09-26",
   "items": [
     {
       "id": "ex-001",
@@ -19,7 +25,9 @@
       "scope": "standalone",
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [22],
+      "evidence_pages": [
+        22
+      ],
       "verified": true,
       "note": "Source: 'The revenue from operations on standalone basis for FY24 stood at Rs 74,540.82 million'. Value correct. Pipeline leaves period and scope None (Limitation L1)."
     },
@@ -35,7 +43,9 @@
       "scope": "consolidated",
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [22],
+      "evidence_pages": [
+        22
+      ],
       "verified": true,
       "note": "Source: 'The revenue from operations on consolidated basis for FY24 stood at Rs 81,415.38 million'. Value correct. Pipeline leaves period and scope None (Limitation L1)."
     },
@@ -51,7 +61,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [33],
+      "evidence_pages": [
+        33
+      ],
       "verified": true,
       "note": "Source p.33: 'Mr. Suvir Suren Sujan, Non-Executive Director, resigned from the Board with effect from August 24, 2023'. Correct; as_of captured."
     },
@@ -67,7 +79,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [40],
+      "evidence_pages": [
+        40
+      ],
       "verified": true,
       "note": "Source p.40 (two tables): 'Mr. Sandeep Kumar Barasia ceased to be a Director with effect from July 01, 2024'. True claim; pipeline extracts it twice (Defect A)."
     },
@@ -83,7 +97,10 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [40, 43],
+      "evidence_pages": [
+        40,
+        43
+      ],
       "verified": true,
       "note": "Source p.40 (two tables) and p.43: same sentence, same date. True claim; pipeline extracts it three times (Defect A)."
     },
@@ -99,7 +116,10 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [40, 43],
+      "evidence_pages": [
+        40,
+        43
+      ],
       "verified": true,
       "note": "Source p.40 (two tables) and p.43: same sentence, same date. True claim; pipeline extracts it three times (Defect A)."
     },
@@ -115,7 +135,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf",
-      "evidence_pages": [10],
+      "evidence_pages": [
+        10
+      ],
       "verified": true,
       "note": "Source p.10: 'India's real GDP grew by 6.5 percent in FY2024/25'. Correct as written."
     },
@@ -129,9 +151,14 @@
       "period": "FY25",
       "as_of": null,
       "scope": null,
-      "qualifiers": ["First Advance Estimate", "estimated"],
+      "qualifiers": [
+        "First Advance Estimate",
+        "estimated"
+      ],
       "evidence_document": "01-india-economic-survey-2024-25-excerpt.pdf",
-      "evidence_pages": [4],
+      "evidence_pages": [
+        4
+      ],
       "verified": true,
       "note": "Source p.4: 'real GDP is estimated to grow by 6.4 per cent in FY25' (First Advance Estimate). Correct; qualifiers captured."
     },
@@ -147,7 +174,9 @@
       "scope": "standalone",
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [22],
+      "evidence_pages": [
+        22
+      ],
       "verified": true,
       "note": "Prior-year comparative in the standalone revenue sentence: 'stood at Rs 74,540.82 million as against Rs66,586.61 million'. Not extracted."
     },
@@ -163,7 +192,9 @@
       "scope": "consolidated",
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [22],
+      "evidence_pages": [
+        22
+      ],
       "verified": true,
       "note": "Prior-year comparative in the consolidated revenue sentence: 'FY24 stood at Rs 81,415.38 million as against Rs72,253.01'. Not extracted."
     },
@@ -176,12 +207,14 @@
       "unit": "INR million",
       "period": "FY24",
       "as_of": null,
-      "scope": null,
+      "scope": "consolidated",
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [22],
+      "evidence_pages": [
+        22
+      ],
       "verified": true,
-      "note": "Source p.22: 'the loss for FY24 stood at Rs 2,491.86 million'. Not extracted."
+      "note": "Source p.22: 'Whereas the loss for FY24 stood at Rs 2,491.86 million' in the consolidated bullet (after the consolidated revenue line; audited table 'Loss for the year' consolidated FY24 column = 2,491.86). Scope corrected null->consolidated in Week 4 Phase 2: source-proven by bullet pairing and table column."
     },
     {
       "id": "ex-012",
@@ -195,7 +228,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [33],
+      "evidence_pages": [
+        33
+      ],
       "verified": true,
       "note": "Source p.33: 'ceased to be a Director with effect from the conclusion of the 12th Annual General Meeting'. Separate status sentence the pipeline misses (textual effective date)."
     },
@@ -211,7 +246,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [33],
+      "evidence_pages": [
+        33
+      ],
       "verified": true,
       "note": "Source p.33: Company Secretary ceased to be associated with effect from May 31, 2023. Not extracted (officer, not director)."
     },
@@ -225,9 +262,14 @@
       "period": null,
       "as_of": "August 04, 2023",
       "scope": null,
-      "qualifiers": ["5 year term"],
+      "qualifiers": [
+        "5 year term"
+      ],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [33, 40],
+      "evidence_pages": [
+        33,
+        40
+      ],
       "verified": true,
       "note": "Source p.33 and p.40: 'appointed as Non-Executive Independent Director ... with effect from August 04, 2023'. Appointment status not extracted."
     },
@@ -243,7 +285,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
-      "evidence_pages": [33],
+      "evidence_pages": [
+        33
+      ],
       "verified": true,
       "note": "Source p.33: 'appointed as Non-Executive Independent Director with effect from July 08, 2022'. Not extracted."
     },
@@ -257,9 +301,13 @@
       "period": "2024-25",
       "as_of": null,
       "scope": null,
-      "qualifiers": ["Second Advance Estimates"],
+      "qualifiers": [
+        "Second Advance Estimates"
+      ],
       "evidence_document": "02-rbi-annual-report-2024-25-excerpt.pdf",
-      "evidence_pages": [8],
+      "evidence_pages": [
+        8
+      ],
       "verified": true,
       "note": "Source p.8: 'real gross domestic product (GDP) growth moderated to 6.5 per cent in 2024-25' (Second Advance Estimates basis per footnote). Third GDP vintage in the corpus; not extracted."
     },
@@ -275,7 +323,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf",
-      "evidence_pages": [10],
+      "evidence_pages": [
+        10
+      ],
       "verified": true,
       "note": "Source p.10: 'Private consumption growth was buoyant at 7.2 percent'. Not extracted."
     },
@@ -291,7 +341,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf",
-      "evidence_pages": [10],
+      "evidence_pages": [
+        10
+      ],
       "verified": true,
       "note": "Source p.10: 'Headline inflation has declined to 1.5 percent in September 2025'. Not extracted."
     },
@@ -305,9 +357,13 @@
       "period": null,
       "as_of": null,
       "scope": null,
-      "qualifiers": ["core"],
+      "qualifiers": [
+        "core"
+      ],
       "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf",
-      "evidence_pages": [10],
+      "evidence_pages": [
+        10
+      ],
       "verified": true,
       "note": "Source p.10: 'Core inflation increased to 4.6 percent (from 3.5 percent FY2024/25 average)'. Not extracted."
     },
@@ -323,7 +379,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf",
-      "evidence_pages": [10],
+      "evidence_pages": [
+        10
+      ],
       "verified": true,
       "note": "Source p.10: 'Unemployment has remained low at 5.2 percent in September'. Not extracted. Period corrected in Week 3 Phase 0 to 'September' — the sentence carries no year; the earlier 'September 2025' was an inference, not source text."
     },
@@ -339,7 +397,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "03-delhivery-q4-fy24-earnings-presentation.pdf",
-      "evidence_pages": [5],
+      "evidence_pages": [
+        5
+      ],
       "verified": true,
       "note": "Source p.5: 'FY24 EBITDA increased by Rs. 578 Cr to Rs. 127 Cr from Rs. (452 Cr) in FY23'. Not extracted."
     },
@@ -355,7 +415,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-rbi-annual-report-2024-25-excerpt.pdf",
-      "evidence_pages": [17],
+      "evidence_pages": [
+        17
+      ],
       "verified": true,
       "note": "Week 3 Phase 0 blast-radius addition. Source p.17: 'headline inflation eased by 73 bps to 4.6 per cent in 2024-25'. Cross-source headline-inflation claim the macro-indicator family will surface; value is the level after 'to', not the 73 bps change."
     },
@@ -371,7 +433,9 @@
       "scope": null,
       "qualifiers": [],
       "evidence_document": "02-rbi-annual-report-2024-25-excerpt.pdf",
-      "evidence_pages": [39],
+      "evidence_pages": [
+        39
+      ],
       "verified": true,
       "note": "Week 3 Phase 0 blast-radius addition. Source p.39: 'Headline inflation eased to 3.3 per cent in March 2025 on sharp moderation in food inflation'."
     },
@@ -385,30 +449,171 @@
       "period": "FY2026/27",
       "as_of": null,
       "scope": null,
-      "qualifiers": ["forecast"],
+      "qualifiers": [
+        "forecast"
+      ],
       "evidence_document": "03-imf-india-2025-article-iv-excerpt.pdf",
-      "evidence_pages": [13],
+      "evidence_pages": [
+        13
+      ],
       "verified": true,
       "note": "Week 3 Phase 0 blast-radius addition. Source p.13: 'In FY2026/27, headline inflation is expected to converge to 4 percent'. Forward-looking projection — qualifier 'forecast' recorded because the sentence says 'expected'; period is the leading 'In FY2026/27'."
+    },
+    {
+      "id": "ex-025",
+      "source": "audit_addition",
+      "subject": "delhivery loss",
+      "predicate": "loss",
+      "value": "1679.68",
+      "unit": "INR million",
+      "period": "FY24",
+      "as_of": null,
+      "scope": "standalone",
+      "qualifiers": [],
+      "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
+      "evidence_pages": [
+        22
+      ],
+      "verified": true,
+      "note": "Source p.22: standalone bullet 'Whereas the loss for FY24 stood at Rs 1,679.68 million as against Rs8,123.02 million for FY23'; audited table 'Loss for the year' standalone FY24 column = 1,679.68. Found by the Week 4 Phase 2 blast-radius scan of the loss-highlights sentence; true claim, added to gold so the induced extraction is scored as TP not FP."
+    },
+    {
+      "id": "ex-026",
+      "source": "audit_addition",
+      "subject": "delhivery loss",
+      "predicate": "loss",
+      "value": "8123.02",
+      "unit": "INR million",
+      "period": "FY23",
+      "as_of": null,
+      "scope": "standalone",
+      "qualifiers": [],
+      "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
+      "evidence_pages": [
+        22
+      ],
+      "verified": true,
+      "note": "Source p.22: standalone bullet comparative 'as against Rs8,123.02 million for FY23'; audited table 'Loss for the year' standalone FY23 column = 8,123.02. True prior-year claim induced by the comparative anchor; added in Week 4 Phase 2 after source verification."
+    },
+    {
+      "id": "ex-027",
+      "source": "audit_addition",
+      "subject": "delhivery loss",
+      "predicate": "loss",
+      "value": "10077.79",
+      "unit": "INR million",
+      "period": "FY23",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence_document": "02-delhivery-annual-report-fy24-excerpt.pdf",
+      "evidence_pages": [
+        22
+      ],
+      "verified": true,
+      "note": "Source p.22: consolidated bullet comparative 'as against Rs10,077.79 million for FY23'; audited table 'Loss for the year' consolidated FY23 column = 10,077.79. True prior-year claim induced by the comparative anchor; added in Week 4 Phase 2 after source verification."
     }
   ],
   "pipeline_fact_audit": {
     "description": "All 13 raw fact rows from the Week 1 clean baseline run, each hand-checked against source text on 2026-09-23.",
     "rows": [
-      {"row": 1, "claim": "delhivery revenue = 74540.82 INR million (p.22)", "verdict": "correct_incomplete", "gold_id": "ex-001", "why": "Value matches source; period/scope not captured (L1)."},
-      {"row": 2, "claim": "delhivery revenue = 81415.38 INR million (p.22)", "verdict": "correct_incomplete", "gold_id": "ex-002", "why": "Value matches source; period/scope not captured (L1)."},
-      {"row": 3, "claim": "Suvir Suren Sujan board status = resigned (p.33)", "verdict": "correct", "gold_id": "ex-003", "why": "Exact source sentence; as_of correct."},
-      {"row": 4, "claim": "Barasia board status = ceased (p.40, table 1)", "verdict": "correct", "gold_id": "ex-004", "why": "Exact source sentence."},
-      {"row": 5, "claim": "Suvir board status = ceased (p.40, table 1)", "verdict": "correct", "gold_id": "ex-005", "why": "Exact source sentence."},
-      {"row": 6, "claim": "Colleran board status = ceased (p.40, table 1)", "verdict": "correct", "gold_id": "ex-006", "why": "Exact source sentence."},
-      {"row": 7, "claim": "Barasia board status = ceased (p.40, table 2)", "verdict": "duplicate", "gold_id": "ex-004", "why": "Same document, same page, same claim as row 4 (Defect A)."},
-      {"row": 8, "claim": "Suvir board status = ceased (p.40, table 2)", "verdict": "duplicate", "gold_id": "ex-005", "why": "Same document, same page, same claim as row 5 (Defect A)."},
-      {"row": 9, "claim": "Colleran board status = ceased (p.40, table 2)", "verdict": "duplicate", "gold_id": "ex-006", "why": "Same document, same page, same claim as row 6 (Defect A)."},
-      {"row": 10, "claim": "Suvir board status = ceased (p.43)", "verdict": "duplicate", "gold_id": "ex-005", "why": "Same document, same claim repeated on p.43 (Defect A cross-page component)."},
-      {"row": 11, "claim": "Colleran board status = ceased (p.43)", "verdict": "duplicate", "gold_id": "ex-006", "why": "Same document, same claim repeated on p.43 (Defect A cross-page component)."},
-      {"row": 12, "claim": "India real GDP growth = 6.5 per cent FY2024/25 (IMF p.10)", "verdict": "correct", "gold_id": "ex-007", "why": "Exact source sentence."},
-      {"row": 13, "claim": "India real GDP growth = 6.4 per cent FY25 (ES p.4)", "verdict": "correct", "gold_id": "ex-008", "why": "Exact source sentence; qualifiers captured."}
+      {
+        "row": 1,
+        "claim": "delhivery revenue = 74540.82 INR million (p.22)",
+        "verdict": "correct_incomplete",
+        "gold_id": "ex-001",
+        "why": "Value matches source; period/scope not captured (L1)."
+      },
+      {
+        "row": 2,
+        "claim": "delhivery revenue = 81415.38 INR million (p.22)",
+        "verdict": "correct_incomplete",
+        "gold_id": "ex-002",
+        "why": "Value matches source; period/scope not captured (L1)."
+      },
+      {
+        "row": 3,
+        "claim": "Suvir Suren Sujan board status = resigned (p.33)",
+        "verdict": "correct",
+        "gold_id": "ex-003",
+        "why": "Exact source sentence; as_of correct."
+      },
+      {
+        "row": 4,
+        "claim": "Barasia board status = ceased (p.40, table 1)",
+        "verdict": "correct",
+        "gold_id": "ex-004",
+        "why": "Exact source sentence."
+      },
+      {
+        "row": 5,
+        "claim": "Suvir board status = ceased (p.40, table 1)",
+        "verdict": "correct",
+        "gold_id": "ex-005",
+        "why": "Exact source sentence."
+      },
+      {
+        "row": 6,
+        "claim": "Colleran board status = ceased (p.40, table 1)",
+        "verdict": "correct",
+        "gold_id": "ex-006",
+        "why": "Exact source sentence."
+      },
+      {
+        "row": 7,
+        "claim": "Barasia board status = ceased (p.40, table 2)",
+        "verdict": "duplicate",
+        "gold_id": "ex-004",
+        "why": "Same document, same page, same claim as row 4 (Defect A)."
+      },
+      {
+        "row": 8,
+        "claim": "Suvir board status = ceased (p.40, table 2)",
+        "verdict": "duplicate",
+        "gold_id": "ex-005",
+        "why": "Same document, same page, same claim as row 5 (Defect A)."
+      },
+      {
+        "row": 9,
+        "claim": "Colleran board status = ceased (p.40, table 2)",
+        "verdict": "duplicate",
+        "gold_id": "ex-006",
+        "why": "Same document, same page, same claim as row 6 (Defect A)."
+      },
+      {
+        "row": 10,
+        "claim": "Suvir board status = ceased (p.43)",
+        "verdict": "duplicate",
+        "gold_id": "ex-005",
+        "why": "Same document, same claim repeated on p.43 (Defect A cross-page component)."
+      },
+      {
+        "row": 11,
+        "claim": "Colleran board status = ceased (p.43)",
+        "verdict": "duplicate",
+        "gold_id": "ex-006",
+        "why": "Same document, same claim repeated on p.43 (Defect A cross-page component)."
+      },
+      {
+        "row": 12,
+        "claim": "India real GDP growth = 6.5 per cent FY2024/25 (IMF p.10)",
+        "verdict": "correct",
+        "gold_id": "ex-007",
+        "why": "Exact source sentence."
+      },
+      {
+        "row": 13,
+        "claim": "India real GDP growth = 6.4 per cent FY25 (ES p.4)",
+        "verdict": "correct",
+        "gold_id": "ex-008",
+        "why": "Exact source sentence; qualifiers captured."
+      }
     ],
-    "summary": {"rows": 13, "correct_unique": 8, "duplicates": 5, "incorrect": 0}
+    "summary": {
+      "rows": 13,
+      "correct_unique": 8,
+      "duplicates": 5,
+      "incorrect": 0
+    }
   }
 }

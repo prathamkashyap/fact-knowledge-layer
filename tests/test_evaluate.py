@@ -39,13 +39,20 @@ from evaluate import (  # noqa: E402
 def test_extraction_gold_structure():
     gold = _load_gold(EXTRACTION_GOLD)
     items = gold["items"]
-    assert gold["gold_version"] == "week3-phase0"
-    assert len(items) == 24
+    assert gold["gold_version"] == "week4-phase2"
+    assert len(items) == 27
 
     current = [g for g in items if g["source"] == "current_pipeline"]
     misses = [g for g in items if g["source"] == "recall_miss"]
+    adds = [g for g in items if g["source"] == "audit_addition"]
     assert len(current) == 8
     assert len(misses) == 16
+    assert len(adds) == 3
+
+    # Week 4: the p.22 loss bullets are the consolidated/standalone columns of
+    # one audited table — ex-011's scope is source-proven, not left null.
+    ex11 = next(g for g in items if g["id"] == "ex-011")
+    assert ex11["scope"] == "consolidated"
 
     ids = [g["id"] for g in items]
     assert len(ids) == len(set(ids)), "gold item ids must be unique"
@@ -68,12 +75,12 @@ def test_extraction_gold_structure():
 def test_relationship_gold_structure():
     gold = _load_gold(RELATIONSHIP_GOLD)
     items = gold["items"]
-    assert gold["gold_version"] == "week3-phase0"
-    assert len(items) == 19
+    assert gold["gold_version"] == "week4-phase2"
+    assert len(items) == 30
 
     label_items = [g for g in items if g["expectation"] == "label"]
     absent_items = [g for g in items if g["expectation"] == "absent"]
-    assert len(label_items) == 13
+    assert len(label_items) == 24
     assert len(absent_items) == 6
 
     for g in items:
@@ -85,9 +92,15 @@ def test_relationship_gold_structure():
             assert g["expected"] == "ABSENT"
 
     # Verdicts: rel-004 is the one genuine baseline pair; rel-010..rel-019
-    # are the ten source-verified Cluster G pairs added in Week 3 Phase 0.
+    # are the ten source-verified Cluster G pairs added in Week 3 Phase 0;
+    # rel-020..rel-030 are the eleven Week 4 p.22 comparative-highlights
+    # pairs added after rule-path derivation + source verification.
     genuine = {g["id"] for g in items if g.get("verdict") == "genuine"}
-    assert genuine == {"rel-004"} | {f"rel-{i:03d}" for i in range(10, 20)}
+    assert genuine == (
+        {"rel-004"}
+        | {f"rel-{i:03d}" for i in range(10, 20)}
+        | {f"rel-{i:03d}" for i in range(20, 31)}
+    )
 
     audit = gold["current_pipeline_rows"]
     assert audit["summary"]["rows"] == 9

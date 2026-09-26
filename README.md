@@ -32,7 +32,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Verify regression test suite (266 passing)
+# 3. Verify regression test suite (282 passing)
 python -m pytest tests/ -q
 
 # 4. Load the bundled starter demo database
@@ -242,7 +242,7 @@ python -m pytest tests/ -q
 ```
 
 ```
-===================== 266 passed, 7 warnings in ~95s =====================
+===================== 282 passed, 7 warnings in ~130s =====================
 ```
 
 | Test File | Count | Coverage Focus |
@@ -255,6 +255,7 @@ python -m pytest tests/ -q
 | `tests/test_pipeline_integration.py` | 28 | End-to-end multi-document pipeline runs, database round-trips, serialization. |
 | `tests/test_demo_loader.py` | 6 | Demo path resolution, starter dataset discovery, clean error handling, e2e smoke load. |
 | `tests/test_macro_indicators.py` | 22 | Named Cluster G gold regressions (ex-017..ex-024), negative grammar guards, corpus-wide blast-radius test, period-reconciliation reasoning. |
+| `tests/test_comparative_highlights.py` | 16 | Named Cluster A+B gold regressions (ex-009/010/011/025/026/027), negative grammar guards, corpus-wide blast-radius test, relationship pair-label guard. |
 | `tests/test_evaluate.py` | 11 | Gold-set integrity (counts, ids, verdicts) and scoring-key semantics. |
 | `tests/test_dedup.py` | 7 | Duplicate fact folding and provenance qualifiers (Week 2 Defect A). |
 | `tests/test_evidence_validation.py` | 7 | Verbatim evidence grounding against the cited page before persistence. |
@@ -281,7 +282,7 @@ In the spirit of complete engineering honesty, the following known gaps are docu
 1. **Table Layout Detachment:**
    Complex financial tables with multi-tier column headers can detach from numerical cells during raw PyMuPDF text extraction. (Note: a Week 3 audit confirmed 0 of the 13 tracked recall misses were caused by page selection or table layout — all 13 were sentence-pattern gaps — so table work is recall-neutral for the current harness, but the UI/extraction limitation itself remains.)
 2. **Extraction Recall:**
-   The offline extractor is precision-first: of 24 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 15 — the remaining 9 are deliberate recall misses (comparative-period figures, loss wording, textual as-of dates, associated-status updates, director appointments, an acronym/footnote GDP claim, and `Rs./Cr` KPI wording) tracked by the evaluation harness rather than pattern-guessed.
+   The offline extractor is precision-first: of 27 hand-verified gold claims in `docs/evaluation/extraction_gold.json`, the clean run matches 21 — the remaining 6 are deliberate recall misses tracked by the evaluation harness rather than pattern-guessed: textual effective-date extraction (ex-012), associated-status extraction (ex-013), director-appointment extraction (ex-014/015), GDP full-form/footnote extraction (ex-016), and EBITDA abbreviated-currency extraction (ex-021).
 
 ### Fixed in Week 2 (for the record)
 
@@ -302,12 +303,12 @@ A formal baseline audit was established before polish work commenced. Full artif
 
 Week 2 added a quantitative harness with hand-verified gold sets:
 - [`scripts/evaluate.py`](scripts/evaluate.py): fresh-run evaluation over the 6-PDF corpus; writes a diffable snapshot to `docs/evaluation/results.json` (latest run + bounded history of labeled runs).
-- [`docs/evaluation/extraction_gold.json`](docs/evaluation/extraction_gold.json): 24 hand-verified gold claims (8 current-pipeline + 16 deliberate recall misses; `gold_version: week3-phase0`).
-- [`docs/evaluation/relationship_gold.json`](docs/evaluation/relationship_gold.json): 19 source-verified pair expectations (13 label-expectation + 6 must-stay-absent; `gold_version: week3-phase0`).
+- [`docs/evaluation/extraction_gold.json`](docs/evaluation/extraction_gold.json): 27 hand-verified gold claims (8 current-pipeline + 16 deliberate recall misses + 3 audit-induced truths from the Week 4 blast-radius scan; `gold_version: week4-phase2`).
+- [`docs/evaluation/relationship_gold.json`](docs/evaluation/relationship_gold.json): 30 source-verified pair expectations (24 label-expectation + 6 must-stay-absent; `gold_version: week4-phase2`).
 
 **Baseline relationship composition (Week 1 archive, 9 rows):** of the 9 baseline relationship rows, all 3 `CONTRADICTS` were artifacts (Defect B, **0 genuine**); 4 `CORROBORATES` rows were same-document duplicate-extraction artifacts (Defect A); the GDP estimate-vintage `RECONCILABLE` was the genuine correct classification; and the revenue `UNCERTAIN` (missing scope context) became `RECONCILABLE` after Week 2 scope/context capture.
 
-**Gold-set scope note:** the relationship gold set contains 19 source-verifiable expectations for the current corpus; expanding it further requires additional cross-document source material rather than synthetic cases — padding with unverifiable entries would weaken the evaluation. Methodology rule (Week 3): pair labels are assigned only after source-verifying each pair against the PDFs; copying the reasoner's own output into the gold set is explicitly banned, and a numerical match across two different series (e.g. headline vs. core inflation) must never be lazily labeled CORROBORATES.
+**Gold-set scope note:** the relationship gold set contains 30 source-verifiable expectations for the current corpus; expanding it further requires additional cross-document source material rather than synthetic cases — padding with unverifiable entries would weaken the evaluation. Methodology rule (Weeks 3–4): pair labels are assigned only after source-verifying each pair against the PDFs; copying the reasoner's own output into the gold set is explicitly banned, and a numerical match across two different series (e.g. headline vs. core inflation) must never be lazily labeled CORROBORATES.
 
 ### Week 3 Cluster G (gold_version week3-phase0)
 
@@ -317,6 +318,20 @@ A corpus-wide audit of the **original 13** `recall_miss` claims found **0 candid
 - **Closed extraction map:** a four-indicator, one-grammar family (`private consumption growth`, `headline inflation`, `core inflation`, `unemployment` with an `(at|to) <number> percent` anchor) extracts exactly those 7 claims and nothing else — guarded by named per-claim regressions, negative-grammar guards, and a corpus-wide blast-radius test asserting the exact claim set.
 - **Reasoner rule 8b (period reconciliation):** numeric same-metric pairs whose *both-known* reporting periods differ classify RECONCILABLE with the period difference stated (e.g. September 2025 vs. the 2024-25 annual average). Same-period differences still reach the contradiction rule; forecast pairs still reconcile via the existing forecast rule.
 - **Two latent bugs found by the new pairs and fixed:** `normalize_period` collapsed `September 2025` and `March 2025` to the same bare-year key `2025` (which made two different months read as the same period); and the evaluator's claim-key stringifier keyed DB-row `str(4.0)` differently from gold `"4"`. Both had named regression tests added.
+
+### Week 4 / Recall Cycle 2 — Cluster A+B (gold_version week4-phase2)
+
+> **Iteration naming:** the branch is `improve/fkl-week3-recall-next` (it began as the next step after Week 3), but the work itself is **Week 4 / Recall Cycle 2 — Comparative Financial Highlights**. Gold versions (`week4-phase2`) and evaluation labels (`week4-p22-highlights`) follow the Week 4 naming; treat "Week 4" and "Recall Cycle 2" as synonyms going forward.
+
+A source-verification audit of the **9 remaining `recall_miss` claims** (ex-009/010/011/012/013/014/015/016/021) confirmed all 9 are true claims against their PDFs, and a corpus-wide blast-radius scan clustered their causes. The selected, best-bounded cluster — **Cluster A+B, the p.22 comparative financial-highlights sentence family** — closed 3 of them:
+
+- **Gold completeness first:** ex-011's scope was corrected from `null` to `consolidated` (source-proven by bullet pairing and the audited p.22 table column), and the blast-radius scan surfaced 3 additional source-verified truth claims induced by the same comparative anchors (ex-025: loss 1,679.68 FY24 standalone; ex-026: loss 8,123.02 FY23 standalone; ex-027: loss 10,077.79 FY23 consolidated) — added as `source: audit_addition` **before** any code changed so the fix would score true claims as TP, not FP.
+- **New relationship expectations locked before implementation:** the expanded revenue group and the new loss group generate **11 new pairs (rel-020..rel-030), broken down as 7 RECONCILABLE by scope difference (rule 6) and 4 RECONCILABLE by reporting-period difference (rule 8b)** — each label derived by rule path, then independently source-verified against the single audited p.22 table/bullets; none copied from reasoner output.
+- **Implementation without architectural change:** two comparative anchors in pipeline section 2d emit the FY23 revenue tails and the FY24/FY23 loss claims (loss scope inherited from the nearest preceding standalone/consolidated basis clause). No matcher, reasoner, or normalizer changes were required — rules 6 and 8b already existed.
+- **Bounded blast radius:** a corpus-wide test asserts the family adds *exactly* the 6 intended annual-report facts; negative grammar guards prove the p.36 "from ₹…" phrasing, "per cent" macro wording, the prospectus, and the Q4 presentation must not fire.
+- **Deferred matcher hazard (textual effective-date extraction, ex-012):** blast-radius analysis showed a naive textual `as_of` extractor would produce a degenerate relationship key colliding with an existing must-stay-absent expectation (`rel-003`) — a matcher-level semantics problem, not an extraction problem. The cluster is deliberately deferred until the matcher skips same-document identical relationship keys; this is the gold-first process catching a hazard *before* code, not after.
+
+The five remaining deferred clusters are tracked by descriptive name rather than letter: **textual effective-date extraction** (ex-012, deferred on the matcher hazard above), **associated-status extraction** (ex-013), **director-appointment extraction** (ex-014/015, blast radius also induces 3 further source-verified gold claims), **GDP full-form/footnote extraction** (ex-016, blast radius dedupe-safe with 2 induced pairs), and **EBITDA abbreviated-currency extraction** (ex-021, blast radius exactly 1 hit).
 
 ### Before / After (Week 2)
 
@@ -346,6 +361,23 @@ A corpus-wide audit of the **original 13** `recall_miss` claims found **0 candid
 | Facts (clean run) | 8 | **15** |
 | Relationships (clean run) | 3 (all RECONCILABLE) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS, 0 CORROBORATES) |
 
+### Before / After (Week 4 / Recall Cycle 2 — Cluster A+B)
+
+| Metric | Post-Cluster-G (`week3-cluster-g`) | Post-Cluster-A+B (`week4-p22-highlights`) |
+|---|---|---|
+| Extraction precision | 1.0000 | **1.0000** |
+| Extraction recall | 0.6250 | **0.7778** |
+| Extraction F1 | 0.7692 | **0.8750** |
+| Period capture | 1.00 | **1.00** |
+| Scope capture | 1.00 | **1.00** |
+| Relationship accuracy | 1.0000 (19/19) | **1.0000 (30/30)** |
+| Absent-expectation compliance | 1.0000 | **1.0000** |
+| Extraction gold | 24 | **27** (16 recall_miss + 3 audit_addition + 8 current_pipeline) |
+| Relationship gold | 19 | **30** (24 label + 6 absent) |
+| Facts (clean run) | 15 | **21** |
+| Relationships (clean run) | 13 (9 RECONCILABLE + 4 UNCERTAIN) | **24** (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS, 0 CORROBORATES) |
+| Tests | 266 | **282** |
+
 Reproduce with:
 
 ```bash
@@ -354,21 +386,21 @@ python scripts/evaluate.py --label <name>   # fresh run; appends to history in d
 
 ### Clean Ingest Summary
 
-| Metric | Week 1 Baseline | Post-Week 2 | Post-Week 3 (Cluster G) |
-|---|---|---|---|
-| Ingested Documents | **6** | **6** | **6** |
-| Pages Parsed | **511** | **511** | **511** |
-| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) | **15** (deduplicated) |
-| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) |
-| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~36–55 s includes gold matching) |
+| Metric | Week 1 Baseline | Post-Week 2 | Post-Week 3 (Cluster G) | Post-Week 4 (Cluster A+B) |
+|---|---|---|---|---|
+| Ingested Documents | **6** | **6** | **6** | **6** |
+| Pages Parsed | **511** | **511** | **511** | **511** |
+| Extracted Facts | 13 (incl. 5 duplicates) | **8** (deduplicated) | **15** (deduplicated) | **21** (deduplicated) |
+| Relationships | 9 (duplicate-inflated) | **3** (all RECONCILABLE, 0 CONTRADICTS, 0 UNCERTAIN) | **13** (9 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) | **24** (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS) |
+| Total Ingestion Time | ~29 s | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~36–55 s includes gold matching) | ~29 s (eval wall time ~29–55 s includes gold matching) |
 
-*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 15 verified facts and 13 grounded relationships at precision 1.0000; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
+*(Note: Earlier runbook documentation reflected an earlier spike using permissive, ungrounded heuristics. The current precision-focused offline pipeline yields 21 verified facts and 24 grounded relationships at precision 1.0000; the Week 1 archive of 13/9 remains in `docs/validation/` for provenance.)*
 
 ---
 
 ## Future Work
 
-- **Extraction Recall:** 9 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) remain unextracted: comparative-period figures (ex-009/010), standalone loss wording (ex-011), textual as-of dates (ex-012), associated-status updates (ex-013), director appointments (ex-014/015), the acronym/footnote GDP claim (ex-016), and `Rs./Cr` KPI wording (ex-021). Raise recall against the harness without regressing precision from 1.0000 — each cluster ships with source-verified gold first, a named regression, and a complete passing eval, per the Cluster G methodology.
+- **Extraction Recall:** 6 hand-verified gold claims in `docs/evaluation/extraction_gold.json` (`recall_miss`) remain unextracted, each with a fully enumerated blast radius from the Week 4 audit: textual effective-date extraction (ex-012 — **deferred**: its induced relationship key collides with a must-stay-absent expectation, so the matcher's same-document degenerate-key semantics must be fixed first), associated-status extraction (ex-013), director-appointment extraction (ex-014/015 — blast radius also induces 3 further source-verified gold claims), GDP full-form/footnote extraction (ex-016 — blast radius dedupe-safe, induces 2 source-verified pairs), and EBITDA abbreviated-currency extraction (ex-021 — blast radius exactly 1 hit). Raise recall against the harness without regressing precision from 1.0000 — each cluster ships with source-verified gold first, a named regression, and a complete passing eval, per the Cluster G / Cluster A+B methodology.
 - **Table Layout Detachment:** improve structured extraction for multi-tier financial tables (remaining known limitation above).
 - **Concrete LLM Provider:** Wire a tested, provider-neutral client (Anthropic Claude, MiMo, or local Ollama) into the existing `LLMProvider` ABC for generalized table extraction. The provider interface exists; no live provider is currently configured or enabled.
 
@@ -381,6 +413,6 @@ In accordance with transparent engineering disclosure, development of this proje
 - **MiMo (`mimo-v2.5-free`):** Primary agent for initial Gates 0–2 scaffolding, PyMuPDF candidate scoring routines, and core unit test suites.
 - **GitHub Copilot:** Code completion and docstring typing assistance throughout development.
 - **Gemini 3.8 Flash High:** Architecture review, implementation of Gate 3–5 normalization, candidate matching, epistemic relationship reasoning heuristics, SQLite persistence, FastAPI routes, zero-build UI, baseline audit verification, and repository polish.
-- **MiMo (`mimo-v2.6-flash-free`):** Week 3 (Cluster G) — recall-miss audit, gold-completeness revision, macro-indicator extraction family, period-reconciliation reasoning, normalizer/evaluator bug fixes, and all accompanying tests and documentation sync. (Week 2 phase attribution not yet recorded here.)
+- **MiMo (`mimo-v2.6-flash-free`):** Week 3 (Cluster G) — recall-miss audit, gold-completeness revision, macro-indicator extraction family, period-reconciliation reasoning, normalizer/evaluator bug fixes, and all accompanying tests and documentation sync. Week 4 / Recall Cycle 2 (Cluster A+B) — nine-claim source audit, blast-radius clustering, p.22 comparative financial-highlights extraction family, source-verified relationship gold expansion (19→30), and all accompanying tests and documentation sync. (Week 2 phase attribution not yet recorded here.)
 
 All architectural decisions, epistemic rules, test validations, and factual claims were verified and tested directly in local execution.

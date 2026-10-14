@@ -1,0 +1,1060 @@
+{
+  "dataset_id": "fkl-independent-heldout-phase1",
+  "title": "Independent held-out gold dataset — Phase 1",
+  "schema_version": "1.0",
+  "baseline_commit": "d9c68bd424883a09107b7507e348107e9f4fbc41",
+  "independence_statement": "Annotations were authored from direct reading of the two source PDFs and verified against their page text. No Fact Knowledge Layer extraction pipeline, application API, provider, or evaluator was run on these documents; no extractor output was used to select or revise annotations.",
+  "annotation_conventions": {
+    "page_numbering": "evidence.pdf_page_index is the 1-based physical PDF page index. evidence.printed_page records the printed page label when present.",
+    "table_evidence": "For table cells, evidence.quotation is the exact displayed cell text; evidence.context records row, column, and applicable heading or footnote so the value can be audited without treating reconstructed table layout as prose.",
+    "values": "value preserves the source display where practical; unit and reporting_basis retain surrounding interpretation. Forecasts remain distinct through qualifiers.",
+    "scope": "Rolls-Royce Group financial highlights are consolidated unless explicitly identified as segment measures. IMF observations refer to the United Kingdom."
+  },
+  "documents": [
+    {
+      "document_id": "rr-holdings-ar-2025",
+      "title": "Rolls-Royce Holdings plc Annual Report 2025",
+      "publisher": "Rolls-Royce Holdings plc",
+      "local_filename": "rolls-royce-2025-annual-report.pdf",
+      "source_url": "https://www.rolls-royce.com/investors/results-reports-and-presentations/annual-report-2025.aspx",
+      "source_document_url": "https://www.rolls-royce.com/~/media/Files/R/Rolls-Royce/documents/annual-report/2026/2025-annual-report-interactive.pdf",
+      "retrieval_date": "unknown",
+      "pdf_page_count": 220,
+      "file_size_bytes": 7077708,
+      "sha256": "c9741d73dba1f52ff4fc48380bf602fb9e422c829a1b47a3d4a5462bdca6d739",
+      "identity_verification": "PDF title page reads ANNUAL REPORT 2025 and Rolls-Royce Holdings plc; official publisher landing page lists Annual Report 2025 and links to its PDF."
+    },
+    {
+      "document_id": "imf-uk-article-iv-2026",
+      "title": "United Kingdom: 2026 Article IV Consultation—Press Release; Staff Report; and Statement by the Executive Director for United Kingdom",
+      "publisher": "International Monetary Fund",
+      "local_filename": "IMF-United-Kingdom,-2026-Article-IV.pdf",
+      "source_url": "https://www.imf.org/en/publications/cr/issues/2026/07/15/united-kingdom-2026-article-iv-consultation-press-release-staff-report-and-statement-by-577619",
+      "source_document_url": null,
+      "retrieval_date": "unknown",
+      "pdf_page_count": 102,
+      "file_size_bytes": 2832305,
+      "sha256": "5097ec0fe9af420635d75f490880d501f3571235a17fe2c79718d0a7bc300657",
+      "identity_verification": "PDF metadata gives the exact report title and IMF Country Report No. 26/172; its title page says United Kingdom and 2026 Article IV Consultation. The official IMF publication page identifies Country Report 26/172 and July 16, 2026 publication."
+    }
+  ],
+  "annotation_notes": [
+    "The Rolls-Royce report distinguishes underlying and statutory measures; both are retained as separate claims. Financial highlights on printed page 2 and segment measures on printed page 3 are table cells, with labels and year-column context recorded in evidence.context.",
+    "For the IMF indicator table, 2026 values are under the Projections heading. Public finance rows are fiscal-year measures; the table footnote states that the fiscal year begins in April. Annual-average, end-period, and volume-change measures remain distinct.",
+    "No fact is drawn from the sealed Bank of England Monetary Policy Report. Retrieval dates were not established from the supplied files or publisher pages and are recorded as unknown."
+  ],
+  "facts": [
+    {
+      "id": "rr-001",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "underlying revenue",
+      "value": "£20,059m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£20,059m",
+        "context": "Financial highlights, UNDERLYING REVENUE, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-002",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "statutory revenue",
+      "value": "£21,207m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£21,207m",
+        "context": "Financial highlights, STATUTORY REVENUE, 2025 primary value"
+      },
+      "reporting_basis": "Statutory measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-003",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "free cash flow",
+      "value": "£3,270m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£3,270m",
+        "context": "Financial highlights, FREE CASH FLOW, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-004",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "cash flows from operating activities",
+      "value": "£4,565m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£4,565m",
+        "context": "Financial highlights, CASH FLOWS FROM OPERATING ACTIVITIES, 2025 primary value"
+      },
+      "reporting_basis": "Statutory measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-005",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "underlying operating profit",
+      "value": "£3,462m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£3,462m",
+        "context": "Financial highlights, UNDERLYING OPERATING PROFIT, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-006",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "statutory operating profit",
+      "value": "£4,468m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£4,468m",
+        "context": "Financial highlights, STATUTORY OPERATING PROFIT, 2025 primary value"
+      },
+      "reporting_basis": "Statutory measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-007",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "underlying operating margin",
+      "value": "17.3%",
+      "unit": "percent",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "17.3%",
+        "context": "Financial highlights, UNDERLYING OPERATING MARGIN, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-008",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "statutory operating margin",
+      "value": "21.1%",
+      "unit": "percent",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "21.1%",
+        "context": "Financial highlights, STATUTORY OPERATING MARGIN, 2025 primary value"
+      },
+      "reporting_basis": "Statutory measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-009",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "underlying profit before tax",
+      "value": "£3,352m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£3,352m",
+        "context": "Financial highlights, UNDERLYING PROFIT BEFORE TAX, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-010",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "statutory profit before tax",
+      "value": "£6,935m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£6,935m",
+        "context": "Financial highlights, STATUTORY PROFIT BEFORE TAX, 2025 primary value"
+      },
+      "reporting_basis": "Statutory measure; Group consolidated.",
+      "verified": true
+    },
+    {
+      "id": "rr-011",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "total underlying cash costs as a proportion of underlying gross margin",
+      "value": "0.36",
+      "unit": "ratio",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "0.36",
+        "context": "Financial highlights, TOTAL UNDERLYING CASH COSTS AS A PROPORTION OF UNDERLYING GROSS MARGIN, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure; ratio abbreviated TCC/GM.",
+      "verified": true
+    },
+    {
+      "id": "rr-012",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "return on capital",
+      "value": "18.9%",
+      "unit": "percent",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "18.9%",
+        "context": "Financial highlights, RETURN ON CAPITAL, 2025 primary value"
+      },
+      "reporting_basis": "Adjusted return on capital, as defined in the report.",
+      "verified": true
+    },
+    {
+      "id": "rr-013",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "underlying earnings per share",
+      "value": "29.55p",
+      "unit": "pence per share",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "29.55p",
+        "context": "Financial highlights, UNDERLYING EARNINGS PER SHARE, 2025 primary value"
+      },
+      "reporting_basis": "Underlying measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-014",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "statutory earnings per share",
+      "value": "69.41p",
+      "unit": "pence per share",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "69.41p",
+        "context": "Financial highlights, STATUTORY EARNINGS PER SHARE, 2025 primary value"
+      },
+      "reporting_basis": "Statutory measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-015",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "net cash",
+      "value": "£1,895m",
+      "unit": "GBP million",
+      "period": "as at 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£1,895m",
+        "context": "Financial highlights, NET CASH, 2025 primary value"
+      },
+      "reporting_basis": "Consolidated balance sheet measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-016",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "liquidity",
+      "value": "£8.7bn",
+      "unit": "GBP billion",
+      "period": "as at 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£8.7bn",
+        "context": "Financial highlights, LIQUIDITY, 2025 primary value"
+      },
+      "reporting_basis": "Defined as cash and cash equivalents plus undrawn facilities.",
+      "verified": true
+    },
+    {
+      "id": "rr-017",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "order backlog",
+      "value": "£88.1bn",
+      "unit": "GBP billion",
+      "period": "as at 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£88.1bn",
+        "context": "Financial highlights, ORDER BACKLOG, 2025 primary value"
+      },
+      "reporting_basis": "Group measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-018",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc",
+      "predicate": "gross R&D expenditure",
+      "value": "£1.4bn",
+      "unit": "GBP billion",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 4,
+        "printed_page": "2",
+        "quotation": "£1.4bn",
+        "context": "Financial highlights, GROSS R&D EXPENDITURE, 2025 primary value"
+      },
+      "reporting_basis": "Gross R&D expenditure; report directs readers to a reconciliation.",
+      "verified": true
+    },
+    {
+      "id": "rr-019",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Civil Aerospace",
+      "predicate": "underlying revenue",
+      "value": "£10,382m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "£10,382m",
+        "context": "Civil Aerospace, UNDERLYING REVENUE, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-020",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Civil Aerospace",
+      "predicate": "underlying operating profit",
+      "value": "£2,130m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "£2,130m",
+        "context": "Civil Aerospace, UNDERLYING OPERATING PROFIT, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-021",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Civil Aerospace",
+      "predicate": "underlying operating margin",
+      "value": "20.5%",
+      "unit": "percent",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "20.5%",
+        "context": "Civil Aerospace, UNDERLYING OPERATING MARGIN, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-022",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Defence",
+      "predicate": "underlying revenue",
+      "value": "£4,772m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "£4,772m",
+        "context": "Defence, UNDERLYING REVENUE, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-023",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Defence",
+      "predicate": "underlying operating profit",
+      "value": "£689m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "£689m",
+        "context": "Defence, UNDERLYING OPERATING PROFIT, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-024",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Defence",
+      "predicate": "underlying operating margin",
+      "value": "14.4%",
+      "unit": "percent",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "14.4%",
+        "context": "Defence, UNDERLYING OPERATING MARGIN, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-025",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Power Systems",
+      "predicate": "underlying revenue",
+      "value": "£4,892m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "£4,892m",
+        "context": "Power Systems, UNDERLYING REVENUE, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-026",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Power Systems",
+      "predicate": "underlying operating profit",
+      "value": "£852m",
+      "unit": "GBP million",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "£852m",
+        "context": "Power Systems, UNDERLYING OPERATING PROFIT, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "rr-027",
+      "document_id": "rr-holdings-ar-2025",
+      "subject": "Rolls-Royce Holdings plc — Power Systems",
+      "predicate": "underlying operating margin",
+      "value": "17.4%",
+      "unit": "percent",
+      "period": "year ended 31 December 2025",
+      "as_of": null,
+      "scope": "consolidated",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "3",
+        "quotation": "17.4%",
+        "context": "Power Systems, UNDERLYING OPERATING MARGIN, 2025 primary value"
+      },
+      "reporting_basis": "Underlying segment measure.",
+      "verified": true
+    },
+    {
+      "id": "imf-001",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Real GDP growth",
+      "value": "1.4",
+      "unit": "percent change",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "1.4",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Real GDP, column 2025; Real Economy"
+      },
+      "reporting_basis": "Historical value.",
+      "verified": true
+    },
+    {
+      "id": "imf-002",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Real GDP growth",
+      "value": "1.0",
+      "unit": "percent change",
+      "period": "calendar year 2026",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [
+        "IMF staff projection"
+      ],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "1.0",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Real GDP, column 2026; Real Economy; column is under Projections heading"
+      },
+      "reporting_basis": "2026 is under Projections heading.",
+      "verified": true
+    },
+    {
+      "id": "imf-003",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Domestic demand growth",
+      "value": "2.0",
+      "unit": "percent change",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "2.0",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Domestic demand, column 2025; Real Economy"
+      },
+      "reporting_basis": "Historical value.",
+      "verified": true
+    },
+    {
+      "id": "imf-004",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Private domestic demand growth",
+      "value": "1.7",
+      "unit": "percent change",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "1.7",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Private domestic demand, column 2025; Real Economy"
+      },
+      "reporting_basis": "Historical value.",
+      "verified": true
+    },
+    {
+      "id": "imf-005",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "CPI inflation, period average",
+      "value": "3.4",
+      "unit": "percent",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "3.4",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row CPI, period average, column 2025; Real Economy"
+      },
+      "reporting_basis": "Period-average rate.",
+      "verified": true
+    },
+    {
+      "id": "imf-006",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "CPI inflation, period average",
+      "value": "3.2",
+      "unit": "percent",
+      "period": "calendar year 2026",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [
+        "IMF staff projection"
+      ],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "3.2",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row CPI, period average, column 2026; Real Economy; column is under Projections heading"
+      },
+      "reporting_basis": "2026 projection; period-average rate.",
+      "verified": true
+    },
+    {
+      "id": "imf-007",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "CPI inflation, end-period",
+      "value": "3.4",
+      "unit": "percent",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "3.4",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row CPI, end-period, column 2025; Real Economy"
+      },
+      "reporting_basis": "End-period rate.",
+      "verified": true
+    },
+    {
+      "id": "imf-008",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "CPI inflation, end-period",
+      "value": "3.5",
+      "unit": "percent",
+      "period": "calendar year 2026",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [
+        "IMF staff projection"
+      ],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "3.5",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row CPI, end-period, column 2026; Real Economy; column is under Projections heading"
+      },
+      "reporting_basis": "2026 projection; end-period rate.",
+      "verified": true
+    },
+    {
+      "id": "imf-009",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "ILO unemployment rate",
+      "value": "4.9",
+      "unit": "percent",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "4.9",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Unemployment rate, column 2025; Real Economy"
+      },
+      "reporting_basis": "ILO measure, based on Labour Force Survey data per table footnote.",
+      "verified": true
+    },
+    {
+      "id": "imf-010",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "ILO unemployment rate",
+      "value": "5.6",
+      "unit": "percent",
+      "period": "calendar year 2026",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [
+        "IMF staff projection"
+      ],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "5.6",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Unemployment rate, column 2026; Real Economy; column is under Projections heading"
+      },
+      "reporting_basis": "2026 projection; ILO measure.",
+      "verified": true
+    },
+    {
+      "id": "imf-011",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Gross national saving",
+      "value": "16.5",
+      "unit": "percent of GDP",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "16.5",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Gross national saving, column 2025; Real Economy"
+      },
+      "reporting_basis": "Historical ratio.",
+      "verified": true
+    },
+    {
+      "id": "imf-012",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Gross domestic investment",
+      "value": "18.9",
+      "unit": "percent of GDP",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "18.9",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Gross domestic investment, column 2025; Real Economy"
+      },
+      "reporting_basis": "Historical ratio.",
+      "verified": true
+    },
+    {
+      "id": "imf-013",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Public sector overall balance",
+      "value": "-4.3",
+      "unit": "percent of GDP",
+      "period": "FY2025/26",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "-4.3",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Public sector overall balance, column 2025; Public Finance; fiscal year, percent of GDP; table footnote states fiscal year begins in April"
+      },
+      "reporting_basis": "2025 table column; fiscal year begins in April.",
+      "verified": true
+    },
+    {
+      "id": "imf-014",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Public sector primary balance",
+      "value": "-1.4",
+      "unit": "percent of GDP",
+      "period": "FY2025/26",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "-1.4",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Public sector primary balance, column 2025; Public Finance; fiscal year, percent of GDP; table footnote states fiscal year begins in April"
+      },
+      "reporting_basis": "2025 table column; fiscal year begins in April.",
+      "verified": true
+    },
+    {
+      "id": "imf-015",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Public sector net financial liabilities (PSNFL)",
+      "value": "82.8",
+      "unit": "percent of GDP",
+      "period": "FY2025/26",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "82.8",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Public sector net financial liabilities (PSNFL), column 2025; Public Finance; fiscal year, percent of GDP; table footnote states fiscal year begins in April"
+      },
+      "reporting_basis": "Broader balance-sheet measure than public sector net debt; fiscal year begins in April.",
+      "verified": true
+    },
+    {
+      "id": "imf-016",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Bank Rate, year average",
+      "value": "4.3",
+      "unit": "percent",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "4.3",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Bank Rate, column 2025; Interest Rates; percent, year average"
+      },
+      "reporting_basis": "Annual average, distinct from the February 2026 point-in-time Bank Rate reported in the press release.",
+      "verified": true
+    },
+    {
+      "id": "imf-017",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Bank Rate, year average",
+      "value": "3.8",
+      "unit": "percent",
+      "period": "calendar year 2026",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [
+        "IMF staff projection"
+      ],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "3.8",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Bank Rate, column 2026; Interest Rates; percent, year average; column is under Projections heading"
+      },
+      "reporting_basis": "2026 staff projection; annual average.",
+      "verified": true
+    },
+    {
+      "id": "imf-018",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Current account balance",
+      "value": "-2.4",
+      "unit": "percent of GDP",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "-2.4",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Current account balance, column 2025; Balance of Payments"
+      },
+      "reporting_basis": "Negative balance indicates a deficit.",
+      "verified": true
+    },
+    {
+      "id": "imf-019",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Current account balance",
+      "value": "-3.2",
+      "unit": "percent of GDP",
+      "period": "calendar year 2026",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [
+        "IMF staff projection"
+      ],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "-3.2",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Current account balance, column 2026; Balance of Payments; column is under Projections heading"
+      },
+      "reporting_basis": "2026 projection; negative balance indicates a deficit.",
+      "verified": true
+    },
+    {
+      "id": "imf-020",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Exports of goods and services volume growth",
+      "value": "2.1",
+      "unit": "percent change",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "2.1",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Exports of G&S (volume change in percent), column 2025; Balance of Payments"
+      },
+      "reporting_basis": "Historical volume change.",
+      "verified": true
+    },
+    {
+      "id": "imf-021",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Imports of goods and services volume growth",
+      "value": "4.2",
+      "unit": "percent change",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "4.2",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Imports of G&S (volume change in percent), column 2025; Balance of Payments"
+      },
+      "reporting_basis": "Historical volume change.",
+      "verified": true
+    },
+    {
+      "id": "imf-022",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Official reserves",
+      "value": "159.1",
+      "unit": "GBP billion",
+      "period": "end of calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "159.1",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Reserves (end of period, billions GBP), column 2025; Balance of Payments"
+      },
+      "reporting_basis": "End-period stock.",
+      "verified": true
+    },
+    {
+      "id": "imf-023",
+      "document_id": "imf-uk-article-iv-2026",
+      "subject": "United Kingdom",
+      "predicate": "Nominal GDP",
+      "value": "3,037",
+      "unit": "GBP billion",
+      "period": "calendar year 2025",
+      "as_of": null,
+      "scope": "United Kingdom",
+      "qualifiers": [],
+      "evidence": {
+        "pdf_page_index": 5,
+        "printed_page": "4",
+        "quotation": "3,037",
+        "context": "Table 1, United Kingdom: Selected Economic Indicators, row Nominal GDP (billions GBP), column 2025; Memorandum Items"
+      },
+      "reporting_basis": "Historical nominal GDP; currency and unit preserved as reported.",
+      "verified": true
+    }
+  ]
+}

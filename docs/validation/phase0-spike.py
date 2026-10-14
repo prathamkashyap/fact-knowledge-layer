@@ -1,5 +1,5 @@
 """
-Phase 0 validation spike — Superjoin Fact Knowledge Layer
+Phase 0 validation spike — Fact Knowledge Layer
 Run this BEFORE scaffolding the repo. No PDF parsing, no DB, no FastAPI —
 just: does the extraction + comparison prompt actually work on real text?
 

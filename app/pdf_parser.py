@@ -10,6 +10,7 @@ import hashlib
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 import pymupdf as fitz
+from app.table_extraction import TableCandidate, TableDiagnostic, extract_tables_from_page
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,8 @@ class PageObject(BaseModel):
     has_tables: bool
     blocks: List[BlockMetadata] = Field(default_factory=list)
     score_breakdown: ScoreBreakdown
+    table_candidates: List[TableCandidate] = Field(default_factory=list)
+    table_diagnostics: List[TableDiagnostic] = Field(default_factory=list)
 
 
 class DocumentIngestionResult(BaseModel):
@@ -204,14 +207,17 @@ def parse_pdf_page(
     # supplemented by PyMuPDF find_tables when drawing complexity is bounded
     # to avoid O(chars x drawings) backtracking stalls on complex annual reports.
     has_tables = False
+    drawings_count: Optional[int] = None
     lines = raw_text.splitlines()
     tabular_lines = sum(1 for line in lines if len(re.findall(r'\b\d+(?:\.\d+)?\b', line)) >= 3)
     if tabular_lines >= 2:
         has_tables = True
     else:
+        # Keep the existing complexity guard: only inspect drawings on pages
+        # whose text does not already satisfy the legacy table heuristic.
         try:
-            drawings = page.get_drawings()
-            if 0 < len(drawings) <= 30:
+            drawings_count = len(page.get_drawings())
+            if drawings_count is not None and 0 < drawings_count <= 30:
                 tables = page.find_tables()
                 if tables and len(tables.tables) > 0:
                     has_tables = True
@@ -227,6 +233,12 @@ def parse_pdf_page(
         threshold=threshold,
     )
 
+    table_result = extract_tables_from_page(
+        page,
+        page_number,
+        allow_find_tables=drawings_count is not None and 0 < drawings_count <= 30,
+    )
+
     return PageObject(
         document_id=doc_id,
         filename=filename,
@@ -237,6 +249,8 @@ def parse_pdf_page(
         has_tables=has_tables,
         blocks=blocks,
         score_breakdown=score_breakdown,
+        table_candidates=table_result.candidates,
+        table_diagnostics=table_result.diagnostics,
     )
 
 

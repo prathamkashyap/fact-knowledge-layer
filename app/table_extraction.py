@@ -27,6 +27,7 @@ class TableDetectionMethod(str, Enum):
 
     PYMUPDF_FIND_TABLES = "pymupdf_find_tables"
     WORD_GEOMETRY = "word_geometry"
+    LABEL_VALUE_GROUPS = "label_value_groups"
     SYNTHETIC = "synthetic"
     OTHER = "other"
 
@@ -107,6 +108,73 @@ class TableExtractionResult(BaseModel):
 
     candidates: list["TableCandidate"] = Field(default_factory=list)
     diagnostics: list[TableDiagnostic] = Field(default_factory=list)
+
+
+class PageComplexity(BaseModel):
+    """Cheap, deterministic workload measurements for PyMuPDF's table detector."""
+
+    drawing_count: Optional[int] = None
+    word_count: Optional[int] = None
+    text_char_count: Optional[int] = None
+    measurement_errors: list[str] = Field(default_factory=list)
+
+
+# Preserve the established 30-drawing ceiling. The additional volume ceilings
+# bound routine pages by both text complexity dimensions; they are conservative
+# workload filters, not runtime guarantees. Development smoke pages are below
+# the text ceilings but exceed the drawing ceiling and therefore use geometry.
+MAX_FIND_TABLES_DRAWINGS = 30
+MAX_FIND_TABLES_WORDS = 3_000
+MAX_FIND_TABLES_TEXT_CHARS = 20_000
+
+
+def measure_page_complexity(page: Any, raw_text: Optional[str] = None, words: Optional[list] = None) -> PageComplexity:
+    measurements = PageComplexity()
+    if raw_text is None:
+        try:
+            raw_text = page.get_text("text") or ""
+        except Exception as exc:
+            measurements.measurement_errors.append(f"text:{type(exc).__name__}")
+    if raw_text is not None:
+        measurements.text_char_count = len(raw_text)
+    if words is None:
+        try:
+            words = page.get_text("words") or []
+        except Exception as exc:
+            measurements.measurement_errors.append(f"words:{type(exc).__name__}")
+    if words is not None:
+        measurements.word_count = len(words)
+    try:
+        measurements.drawing_count = len(page.get_drawings())
+    except Exception as exc:
+        measurements.measurement_errors.append(f"drawings:{type(exc).__name__}")
+    return measurements
+
+
+def table_detector_workload_allowed(complexity: PageComplexity) -> tuple[bool, str]:
+    """Apply fixed workload bounds; missing measurements abstain from the costly detector."""
+    if complexity.measurement_errors:
+        return False, "measurement_failed"
+    if complexity.drawing_count is None or complexity.word_count is None or complexity.text_char_count is None:
+        return False, "measurement_unavailable"
+    if complexity.drawing_count == 0:
+        return False, "no_vector_drawings"
+    if complexity.drawing_count > MAX_FIND_TABLES_DRAWINGS:
+        return False, "drawing_limit"
+    if complexity.word_count > MAX_FIND_TABLES_WORDS:
+        return False, "word_limit"
+    if complexity.text_char_count > MAX_FIND_TABLES_TEXT_CHARS:
+        return False, "text_limit"
+    return True, "within_limits"
+
+
+def _workload_diagnostic_message(reason: str, complexity: PageComplexity) -> str:
+    return (
+        f"find_tables skipped ({reason}); drawing_count={complexity.drawing_count}, "
+        f"word_count={complexity.word_count}, text_char_count={complexity.text_char_count}, "
+        f"measurement_errors={','.join(complexity.measurement_errors) or 'none'}. "
+        "Word-geometry fallback remains enabled."
+    )
 
 
 class TableCell(BaseModel):
@@ -436,7 +504,12 @@ def extract_tables_from_page(
     page: Any,
     page_number: int,
     *,
-    allow_find_tables: bool = True,
+    allow_find_tables: Optional[bool] = None,
+    complexity: Optional["PageComplexity"] = None,
+    words: Optional[list] = None,
+    find_tables_result: Any = None,
+    find_tables_error: Optional[str] = None,
+    find_tables_was_called: bool = False,
 ) -> TableExtractionResult:
     """Adapt PyMuPDF table and word geometry without asserting factual meaning.
 
@@ -456,24 +529,36 @@ def extract_tables_from_page(
         result.diagnostics.append(_diagnostic("invalid_page_number", "Physical page number must be positive."))
         return result
 
+    complexity = complexity or measure_page_complexity(page)
+    allowed, reason = table_detector_workload_allowed(complexity)
+    if allow_find_tables is not None:
+        allowed = allowed and allow_find_tables
+        if not allow_find_tables:
+            reason = "caller_disabled"
     bordered: list[TableCandidate] = []
     finder = None
     find_tables = getattr(page, "find_tables", None)
-    if not allow_find_tables:
+    if not callable(find_tables):
+        result.diagnostics.append(_diagnostic("find_tables_unavailable", "This PyMuPDF page has no find_tables() API."))
+    elif not allowed:
         result.diagnostics.append(_diagnostic(
-            "find_tables_skipped_complex_page",
-            "PyMuPDF vector drawing count exceeded the parser's bounded table-detection limit.",
+            "find_tables_skipped_workload",
+            _workload_diagnostic_message(reason, complexity),
             DiagnosticSeverity.INFO,
         ))
-    elif callable(find_tables):
+    elif find_tables_was_called:
+        finder = find_tables_result
+        if find_tables_error:
+            result.diagnostics.append(_diagnostic(
+                "find_tables_failed", f"PyMuPDF table detection failed: {find_tables_error}."
+            ))
+    else:
         try:
             finder = find_tables()
         except Exception as exc:  # PyMuPDF versions can reject unsupported page layouts.
             result.diagnostics.append(_diagnostic(
                 "find_tables_failed", f"PyMuPDF table detection failed: {type(exc).__name__}."
             ))
-    else:
-        result.diagnostics.append(_diagnostic("find_tables_unavailable", "This PyMuPDF page has no find_tables() API."))
 
     raw_tables = getattr(finder, "tables", ()) if finder is not None else ()
     for table_index, table in enumerate(raw_tables or ()):
@@ -494,10 +579,13 @@ def extract_tables_from_page(
 
     result.candidates.extend(bordered)
     try:
-        words = page.get_text("words") or []
+        words = words if words is not None else (page.get_text("words") or [])
         borderless, diagnostics = _borderless_candidates(page, page_number, words, bordered)
         result.candidates.extend(borderless)
         result.diagnostics.extend(diagnostics)
+        groups, group_diagnostics = _label_value_group_candidates(page, page_number, words, bordered)
+        result.candidates.extend(groups)
+        result.diagnostics.extend(group_diagnostics)
     except Exception as exc:
         result.diagnostics.append(_diagnostic(
             "word_geometry_failed", f"PyMuPDF word geometry failed: {type(exc).__name__}."
@@ -512,6 +600,7 @@ def extract_tables_from_page(
             (cell.row_index, cell.column_index, cell.bbox or (), cell.text)
             for cell in item.cells
         ),
+        item.model_dump_json(exclude={"table_id"}),
     ))
     for index, candidate in enumerate(result.candidates):
         candidate.table_id = f"p{page_number}-t{index:02d}"
@@ -695,10 +784,37 @@ def _borderless_candidates(
     # heading/baseline but not stitching distant page regions together.
     runs: list[list[tuple[int, dict[int, tuple[str, BoundingBox]]]]] = []
     for record in row_records:
-        if not runs or record[0] - runs[-1][-1][0] > 2:
+        if not runs:
             runs.append([record])
-        else:
+            continue
+        previous = runs[-1][-1]
+        gap = record[0] - previous[0]
+        shared = set(record[1]) & set(previous[1])
+        if gap == 1 and len(shared) >= 2:
             runs[-1].append(record)
+            continue
+        between = segmented[previous[0] + 1:record[0]]
+        heading_rows = []
+        for heading_index, (heading_line, heading_segments) in enumerate(between, start=previous[0] + 1):
+            if len(heading_segments) != 1:
+                continue
+            heading_box, heading_text = heading_segments[0]
+            center = (heading_box[0] + heading_box[2]) / 2
+            heading_column = sum(boundary < center for boundary in boundaries)
+            if heading_column == 0 and not _looks_numeric(heading_text) and not _is_period_token(heading_text):
+                heading_rows.append((heading_index, {0: (heading_text, heading_box)}))
+        bridge = (
+            gap in {2, 3}
+            and len(shared) >= 2
+            and len(heading_rows) == gap - 1
+            and 0 in previous[1] and 0 in record[1]
+            and abs(previous[1][0][1][0] - record[1][0][1][0]) <= max(20.0, median(heights) * 4)
+        )
+        if bridge:
+            runs[-1].extend(heading_rows)
+            runs[-1].append(record)
+        else:
+            runs.append([record])
     runs = [run for run in runs if len(run) >= 3 and sum(
         any(col > 0 and _looks_numeric(text) for col, (text, _) in row.items()) for _, row in run
     ) >= 2]
@@ -721,6 +837,12 @@ def _borderless_candidates(
                 DiagnosticSeverity.INFO,
             )
         ]
+        if any(len(row) == 1 and 0 in row for _, row in run):
+            diagnostics.append(_diagnostic(
+                "internal_subheading_retained",
+                "A text-only subheading was retained because recurring columns and the label region continue across it.",
+                DiagnosticSeverity.INFO,
+            ))
         if len(column_indices) >= 3:
             for row_index, (_, row) in enumerate(run[:-1]):
                 contains_value = any(_looks_numeric(text) for text, _ in row.values())
@@ -801,7 +923,7 @@ def _aligned_numeric_candidates(
             nearest = min(range(len(anchor_x)), key=lambda i: abs(anchor_x[i] - box[2]))
             aligned_right_edge = abs(anchor_x[nearest] - box[2]) <= tolerance
             aligned_placeholder = (
-                text.strip() in {"…", "...", "–", "—", "-"}
+                _is_placeholder(text)
                 and abs(anchor_x[nearest] - box[2]) <= tolerance * 1.8
                 and box[0] >= anchor_x[0] - tolerance
             )
@@ -819,15 +941,53 @@ def _aligned_numeric_candidates(
             DiagnosticSeverity.INFO,
         )]
 
-    # Keep local vertical runs; unrelated sections with the same right-aligned
-    # columns must not be fused into one candidate.
+    period_headers = []
+    for line_index, line in enumerate(lines):
+        periods = [(box, text) for box, text in line if _is_period_token(text)]
+        assignments = {}
+        for box, text in periods:
+            center = (box[0] + box[2]) / 2
+            nearest = min(range(len(anchor_x)), key=lambda i: abs(anchor_x[i] - center))
+            if abs(anchor_x[nearest] - center) <= max(12.0, median(heights) * 2.5):
+                assignments[nearest] = (box, text)
+        if len(assignments) >= 2:
+            period_headers.append((line_index, assignments))
+
+    # Keep local vertical runs. A single internal text-only subheading may be
+    # retained only when two or more right-edge anchors and the left label
+    # region continue on both sides; vertical proximity alone is insufficient.
     max_line_gap = max(3, round(28.0 / max(median(heights), 1.0)))
     runs: list[list[tuple[int, dict[int, list[tuple[BoundingBox, str]]], list[tuple[BoundingBox, str]]]]] = []
     for record in row_records:
-        if not runs or record[0] - runs[-1][-1][0] > max_line_gap:
+        if not runs:
             runs.append([record])
-        else:
+            continue
+        previous = runs[-1][-1]
+        gap = record[0] - previous[0]
+        shared = set(record[1]) & set(previous[1])
+        if gap == 1 and len(shared) >= 2:
             runs[-1].append(record)
+            continue
+        intervening = lines[previous[0] + 1:record[0]]
+        bridge = (
+            gap in {2, 3}
+            and gap <= max_line_gap
+            and len(shared) >= 2
+            and bool(intervening)
+            and all(
+                not any(_looks_numeric(text) or _is_period_token(text) for _, text in line)
+                and (not line or max(box[2] for box, _ in line) < anchor_x[0] - tolerance)
+                for line in intervening
+            )
+            and bool(previous[2]) and bool(record[2])
+            and abs(max(item[0][2] for item in previous[2]) - max(item[0][2] for item in record[2])) <= tolerance * 4
+        )
+        if bridge:
+            for offset, heading_line in enumerate(intervening, start=1):
+                runs[-1].append((previous[0] + offset, {}, heading_line))
+            runs[-1].append(record)
+        else:
+            runs.append([record])
 
     candidates = []
     for run_index, run in enumerate(runs):
@@ -842,6 +1002,13 @@ def _aligned_numeric_candidates(
         all_boxes = []
         unresolved_rows = []
         for row_index, (_, assignments, label_words) in enumerate(run):
+            if not assignments:
+                if label_words:
+                    heading_box = _union_boxes([item[0] for item in label_words])
+                    heading_text = " ".join(item[1] for item in sorted(label_words, key=lambda item: item[0][0]))
+                    cells.append(TableCell(row_index=row_index, column_index=0, text=heading_text, bbox=heading_box))
+                    all_boxes.append(heading_box)
+                continue
             usable = {anchor: values[0] for anchor, values in assignments.items() if anchor in frequent}
             if len(usable) < 2:
                 continue
@@ -886,6 +1053,51 @@ def _aligned_numeric_candidates(
                 DiagnosticSeverity.INFO,
             )
         ]
+        if any(not row[1] for row in run):
+            aligned_diagnostics.append(_diagnostic(
+                "internal_subheading_retained",
+                "A text-only subheading was retained inside the recurring value-column region.",
+                DiagnosticSeverity.INFO,
+            ))
+        first_value_top = min(
+            box[1]
+            for values in run[0][1].values()
+            for box, _ in values
+        )
+        header_distance_limit = max(48.0, median(heights) * 6.0)
+        matching_headers = [
+            header for header in period_headers
+            if 0 <= first_value_top - max(box[3] for box, _ in header[1].values()) <= header_distance_limit
+        ]
+        header_association_kind = "period_headers_associated_by_alignment"
+        if not matching_headers and len(period_headers) == 1:
+            # A page-wide header may govern multiple separated row blocks of a
+            # single table. Require every recurring numeric column to have an
+            # unambiguous period token at its own aligned x position.
+            global_header = period_headers[0]
+            if set(global_header[1]) == set(frequent):
+                matching_headers = [global_header]
+                header_association_kind = "period_headers_associated_by_page_grid"
+        if len(matching_headers) == 1:
+            header_line_index, header_values = matching_headers[0]
+            shifted = [cell.model_copy(update={"row_index": cell.row_index + 1}) for cell in cells]
+            for anchor, (box, text) in header_values.items():
+                if anchor in frequent:
+                    column = anchor - min(frequent) + 1
+                    shifted.append(TableCell(row_index=0, column_index=column, text=text, bbox=box))
+                    all_boxes.append(box)
+            cells = sorted(shifted, key=lambda cell: (cell.row_index, cell.column_index))
+            aligned_diagnostics.append(_diagnostic(
+                header_association_kind,
+                f"A period header at text line {header_line_index} aligns with recurring numeric columns.",
+                DiagnosticSeverity.INFO,
+            ))
+        elif len(matching_headers) > 1:
+            aligned_diagnostics.append(_diagnostic(
+                "ambiguous_period_header",
+                "Multiple nearby period headers align with numeric columns; no header was selected.",
+            ))
+        bbox = _union_boxes(all_boxes)
         for row_index in unresolved_rows:
             aligned_diagnostics.append(_diagnostic(
                 "possible_wrapped_row_label",
@@ -950,9 +1162,184 @@ def _join_segment(words: list[tuple[BoundingBox, str]]) -> tuple[BoundingBox, st
 
 
 def _looks_numeric(text: str) -> bool:
-    # A standalone unit/currency token is label context, not a numeric value.
-    # Currency symbols and codes remain in the raw cell text beside their digits.
-    return bool(re.search(r"\d", text))
+    """Recognize value-like numeric tokens while excluding periods and prose."""
+    value = text.strip()
+    if not value or _is_placeholder(value) or _is_period_token(value):
+        return False
+    value = value.replace("−", "-").replace("–", "-")
+    value = re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰*†‡]+$", "", value).strip()
+    return bool(re.fullmatch(
+        r"\(?\s*[+-]?\s*(?:(?:GBP|USD|EUR|INR|JPY|CNY)\s*)?"
+        r"[£$€₹¥]?\s*\d[\d,]*(?:\.\d+)?\s*"
+        r"(?:%|percent|per\s+cent|pp|p\.p\.?|pence|p|thousand|million|billion|mn|bn|[kmb])?\s*\)?",
+        value,
+        re.IGNORECASE,
+    ))
+
+
+def _is_period_token(text: str) -> bool:
+    value = text.strip().strip("()[]{}.,;:")
+    return bool(
+        re.fullmatch(r"(?i)(?:FY\s*)?(?:19|20)\d{2}(?:\s*[-/–—]\s*\d{2,4})?", value)
+        or re.fullmatch(r"(?i)FY\s*\d{2,4}", value)
+        or re.fullmatch(r"(?i)Q[1-4](?:\s*FY?\s*\d{2,4})?", value)
+        or re.fullmatch(r"\d{1,2}/\d{1,2}/(?:19|20)\d{2}", value)
+    )
+
+
+def _is_placeholder(text: str) -> bool:
+    return text.strip().casefold() in {
+        "", "-", "–", "—", "−", "·", "...", "…", "n/a", "na", "n.a.", "not available", "nil"
+    }
+
+
+def _label_text(lines: list[tuple[BoundingBox, str]]) -> str:
+    return " ".join(text for _, text in sorted(lines, key=lambda item: item[0][0])).strip()
+
+
+def _is_group_label(text: str) -> bool:
+    words = text.split()
+    letters = [char for char in text if char.isalpha()]
+    if not letters or not 2 <= len(words) <= 5 or len(text) > 64:
+        return False
+    if _looks_numeric(text) or _is_period_token(text) or any(char in text for char in ".,;:!?"):
+        return False
+    return sum(char.isupper() for char in letters) / len(letters) >= 0.68
+
+
+def _is_group_heading(text: str) -> bool:
+    words = text.split()
+    letters = [char for char in text if char.isalpha()]
+    return bool(
+        letters and 1 <= len(words) <= 4 and len(text) <= 48
+        and not _looks_numeric(text)
+        and sum(char.isupper() for char in letters) / len(letters) >= 0.68
+    )
+
+
+def _label_value_group_candidates(
+    page: Any,
+    page_number: int,
+    words: list,
+    bordered: list[TableCandidate],
+) -> tuple[list[TableCandidate], list[TableDiagnostic]]:
+    """Find repeated, local label/value cards without interpreting their meaning."""
+    parsed = []
+    heights = []
+    for word in words:
+        if len(word) < 5:
+            continue
+        try:
+            box = _validate_bbox(tuple(float(value) for value in word[:4]))
+        except (TypeError, ValueError):
+            continue
+        text = str(word[4]).strip()
+        if box is None or not text or box[3] <= box[1]:
+            continue
+        parsed.append((box, text))
+        heights.append(box[3] - box[1])
+    if len(parsed) < 10:
+        return [], []
+    lines = _group_words_into_lines(parsed, max(1.0, median(heights) * 0.45))
+    line_info = []
+    gap_threshold = max(18.0, median(heights) * 2.2)
+    for index, line in enumerate(lines):
+        for segment_box, segment_text in _split_line_cells(line, gap_threshold):
+            segment = [(box, text) for box, text in line if box[0] >= segment_box[0] - 0.5 and box[2] <= segment_box[2] + 0.5]
+            values = [(cell_box, value) for cell_box, value in segment if _looks_numeric(value)]
+            line_info.append((index, segment, segment_text, segment_box, values))
+
+    pairs = []
+    max_vertical = max(18.0, median(heights) * 3.5)
+    for label_index, label_line, label, label_box, _ in line_info:
+        if not _is_group_label(label):
+            continue
+        choices = []
+        for value_index, value_line, _, value_line_box, values in line_info:
+            delta = value_line_box[1] - label_box[3]
+            if value_index <= label_index or delta < -1.0 or delta > max_vertical or len(values) != 1:
+                continue
+            value_box, value_text = values[0]
+            if abs(value_box[0] - label_box[0]) > max(24.0, median(heights) * 3.0):
+                continue
+            choices.append((delta, value_index, value_line, value_box, value_text))
+        if not choices:
+            continue
+        delta, value_index, value_line, value_box, value_text = min(choices, key=lambda item: (item[0], item[1]))
+        # A nearby left-hand short heading can be retained as group context,
+        # but only its source text is recorded; it is not called an entity.
+        nearby = [
+            (heading_box, heading_text)
+            for _, heading_line, heading_text, heading_box, _ in line_info
+            if abs(((heading_box[1] + heading_box[3]) / 2) - ((label_box[1] + label_box[3]) / 2)) <= max(8.0, median(heights))
+            and heading_box[2] < label_box[0] - max(30.0, median(heights) * 3.0)
+            and _is_group_heading(heading_text)
+        ]
+        context = max(nearby, key=lambda item: (item[0][2], -item[0][0])) if nearby else None
+        pairs.append({
+            "label": label,
+            "label_box": label_box,
+            "label_index": label_index,
+            "value": value_text,
+            "value_box": value_box,
+            "value_index": value_index,
+            "context": context,
+        })
+
+    # A one-off label/value pair is indistinguishable from a definition list.
+    # Require repeated exact metric labels and repeated group headings, each
+    # backed by a spatially adjacent value line.
+    by_label: dict[str, list[dict]] = {}
+    for pair in pairs:
+        by_label.setdefault(re.sub(r"\s+", " ", pair["label"]).casefold(), []).append(pair)
+
+    candidates = []
+    diagnostics = []
+    for label_key, group in sorted(by_label.items()):
+        with_context = [pair for pair in group if pair["context"] is not None]
+        if len(group) < 2 or len(with_context) < 2:
+            continue
+        group.sort(key=lambda pair: (pair["label_box"][1], pair["label_box"][0], pair["value_box"][1]))
+        cells = []
+        all_boxes = []
+        for row_index, pair in enumerate(group):
+            if pair["context"]:
+                context_box, context_text = pair["context"]
+                cells.append(TableCell(row_index=row_index, column_index=0, text=context_text, bbox=context_box))
+                all_boxes.append(context_box)
+            cells.append(TableCell(row_index=row_index, column_index=1, text=pair["label"], bbox=pair["label_box"]))
+            cells.append(TableCell(row_index=row_index, column_index=2, text=pair["value"], bbox=pair["value_box"]))
+            all_boxes.extend((pair["label_box"], pair["value_box"]))
+        bbox = _union_boxes(all_boxes)
+        if any(_boxes_overlap_ratio(bbox, table.bbox) > 0.75 for table in bordered if table.bbox):
+            continue
+        candidates.append(TableCandidate(
+            table_id=f"p{page_number}-groups-{len(candidates):02d}",
+            page_number=page_number,
+            bbox=bbox,
+            detection_method=TableDetectionMethod.LABEL_VALUE_GROUPS,
+            confidence=None,
+            diagnostics=[
+                _diagnostic(
+                    "repeated_label_value_groups",
+                    f"Repeated source label {group[0]['label']!r} is paired with {len(group)} nearby displayed values and adjacent group headings.",
+                    DiagnosticSeverity.INFO,
+                ),
+                _diagnostic(
+                    "group_semantics_unresolved",
+                    "Group headings, entity, period, unit, and factual meaning remain source text or unresolved context.",
+                    DiagnosticSeverity.INFO,
+                ),
+            ],
+            cells=cells,
+        ))
+    if pairs and not candidates:
+        diagnostics.append(_diagnostic(
+            "label_value_groups_insufficient_repetition",
+            "Nearby label/value pairs lacked repeated labels and adjacent group headings; no group candidate was emitted.",
+            DiagnosticSeverity.INFO,
+        ))
+    return candidates, diagnostics
 
 
 def _cluster_positions(values: list[float], tolerance: float) -> list[tuple[float, int]]:

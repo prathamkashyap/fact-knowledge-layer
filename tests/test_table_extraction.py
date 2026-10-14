@@ -25,6 +25,9 @@ from app.table_extraction import (
     TableRowValueContext,
     UnitInterpretation,
     UnitKind,
+    _is_placeholder,
+    _is_period_token,
+    _looks_numeric,
     extract_tables_from_page,
     validate_context_provenance,
 )
@@ -654,6 +657,9 @@ def test_unavailable_and_malformed_find_tables_results_emit_diagnostics():
         def get_text(self, kind):
             return []
 
+        def get_drawings(self):
+            return [{}]
+
     class FakePage:
         rotation = 0
         rect = pymupdf.Rect(0, 0, 100, 100)
@@ -669,6 +675,9 @@ def test_unavailable_and_malformed_find_tables_results_emit_diagnostics():
 
         def get_text(self, kind):
             return []
+
+        def get_drawings(self):
+            return [{}]
 
     class MalformedTable:
         row_count = 2
@@ -709,6 +718,9 @@ def test_ids_are_stable_and_missing_cell_geometry_is_not_fabricated():
         def get_text(self, kind):
             return []
 
+        def get_drawings(self):
+            return [{}]
+
         def find_tables(self):
             return type("Finder", (), {"tables": [type("Table", (), {
                 "row_count": 1, "col_count": 1, "bbox": None, "cells": [None],
@@ -736,5 +748,321 @@ def test_parser_exposes_layout_candidates_without_changing_text_or_score():
         assert parsed.score_breakdown == expected
         assert parsed.table_candidates
         assert not hasattr(parsed.table_candidates[0], "facts")
+    finally:
+        doc.close()
+
+
+def test_period_tokens_and_placeholders_are_not_numeric_values():
+    for token in ("FY2024", "Q4", "2023-24", "2023–24", "2024", "31/12/2024", "n/a", "—", "–", ""):
+        assert not _looks_numeric(token), token
+    for token in ("(£25m)", "-2.1%", "£38m", "£25 million", "£1.25p", "1,234.50", "0.25"):
+        assert _looks_numeric(token), token
+    assert _is_period_token("FY2024")
+    assert _is_period_token("Q4")
+    assert _is_period_token("2023-24")
+    assert _is_placeholder("—") and _is_placeholder("n/a")
+
+
+def test_date_heavy_two_column_prose_does_not_become_a_table():
+    doc = pymupdf.open()
+    page = doc.new_page(width=500, height=260)
+    for index, (left, right) in enumerate((
+        ("The 2024 results were published", "on 31 March 2024 after review"),
+        ("During 2023 the company reported", "on 15 June 2023 to investors"),
+        ("In FY2022 the report notes", "on 2 February 2022 for reference"),
+    )):
+        y = 60 + index * 35
+        page.insert_text((30, y), left, fontsize=9)
+        page.insert_text((275, y), right, fontsize=9)
+    try:
+        result = extract_tables_from_page(page, page_number=1)
+        assert not result.candidates
+    finally:
+        doc.close()
+
+
+def test_year_headers_and_placeholder_values_keep_their_columns():
+    doc = _make_borderless_pdf()
+    try:
+        result = extract_tables_from_page(doc[0], page_number=3)
+        assert result.candidates
+        candidate = result.candidates[0]
+        cells = {(cell.row_index, cell.column_index): cell.text for cell in candidate.cells}
+        assert "FY2024" in cells.values() and "FY2025" in cells.values()
+        assert cells[(3, 2)] == "n/a"
+        assert cells[(3, 1)] == "-2.1%"
+    finally:
+        doc.close()
+
+
+def test_blank_and_dash_cells_do_not_shift_later_numeric_columns():
+    doc = pymupdf.open()
+    page = doc.new_page(width=420, height=230)
+    rows = [
+        ((35, "Measure"), (190, "FY2024"), (300, "FY2025")),
+        ((35, "Revenue"), (190, "100"), (300, "110")),
+        ((35, "Profit"), (300, "12")),  # the first value cell is genuinely blank
+        ((35, "Margin"), (190, "-2.1%"), (300, "3.0%")),
+        ((35, "Cash"), (190, "—"), (300, "15")),
+    ]
+    for row_index, row in enumerate(rows):
+        for x, text in row:
+            page.insert_text((x, 45 + row_index * 30), text, fontsize=9)
+    try:
+        result = extract_tables_from_page(page, page_number=4, allow_find_tables=False)
+        assert result.candidates
+        candidate = max(result.candidates, key=lambda item: len(item.cells))
+        cells = {(cell.row_index, cell.column_index): cell.text for cell in candidate.cells}
+        assert any(text == "12" and column > 1 for (row, column), text in cells.items())
+        # PyMuPDF's synthetic Helvetica encoding exposes this em dash as a
+        # middle-dot glyph; the raw extracted surface is retained and treated
+        # as a placeholder rather than as numeric data.
+        assert "·" in cells.values() and _is_placeholder("·")
+        assert any(text == "15" and column > 1 for (row, column), text in cells.items())
+    finally:
+        doc.close()
+
+
+def test_high_drawing_workload_skips_find_tables_but_keeps_word_fallback_and_stable_diagnostic():
+    source = _make_borderless_pdf()
+    try:
+        class ComplexPage:
+            rotation = 0
+            rect = source[0].rect
+            mediabox = source[0].mediabox
+            derotation_matrix = source[0].derotation_matrix
+
+            def __init__(self):
+                self.calls = 0
+
+            def get_text(self, kind):
+                return source[0].get_text(kind)
+
+            def get_drawings(self):
+                return [{}] * 45
+
+            def find_tables(self):
+                self.calls += 1
+                raise AssertionError("expensive detector should be skipped")
+
+        page = ComplexPage()
+        first = extract_tables_from_page(page, page_number=7)
+        second = extract_tables_from_page(page, page_number=7)
+        assert page.calls == 0
+        assert first.candidates
+        assert any(item.code == "find_tables_skipped_workload" for item in first.diagnostics)
+        diagnostic = next(item.message for item in first.diagnostics if item.code == "find_tables_skipped_workload")
+        assert "drawing_count=45" in diagnostic and "word_count=" in diagnostic and "fallback remains enabled" in diagnostic
+        assert first.diagnostics[0].model_dump_json() == second.diagnostics[0].model_dump_json()
+    finally:
+        source.close()
+
+
+def test_bordered_table_uses_find_tables_within_workload_limits():
+    doc = _make_bordered_pdf()
+    try:
+        result = extract_tables_from_page(doc[0], page_number=9)
+        assert any(item.detection_method == TableDetectionMethod.PYMUPDF_FIND_TABLES for item in result.candidates)
+        assert not any(item.code == "find_tables_skipped_workload" for item in result.diagnostics)
+    finally:
+        doc.close()
+
+
+def test_two_adjacent_bordered_tables_remain_separate_candidates():
+    doc = pymupdf.open()
+    page = doc.new_page(width=440, height=250)
+    for x0, y0, label in ((30, 30, "Revenue"), (240, 135, "Cash flow")):
+        x1, xm, x2 = x0, x0 + 75, x0 + 150
+        y1, ym, y2 = y0, y0 + 32, y0 + 64
+        for x in (x1, xm, x2):
+            page.draw_line((x, y1), (x, y2))
+        for y in (y1, ym, y2):
+            page.draw_line((x1, y), (x2, y))
+        page.insert_text((x1 + 4, y1 + 20), "Measure", fontsize=9)
+        page.insert_text((xm + 4, y1 + 20), "FY2024", fontsize=9)
+        page.insert_text((x1 + 4, ym + 20), label, fontsize=9)
+        page.insert_text((xm + 4, ym + 20), "100", fontsize=9)
+    try:
+        result = extract_tables_from_page(page, page_number=1)
+        tables = [candidate for candidate in result.candidates if candidate.detection_method == TableDetectionMethod.PYMUPDF_FIND_TABLES]
+        assert len(tables) == 2
+        assert sorted(candidate.bbox[1] for candidate in tables) == sorted((30, 135))
+        assert all(any(cell.text in {"Revenue", "Cash flow"} for cell in candidate.cells) for candidate in tables)
+    finally:
+        doc.close()
+
+
+def test_overlapping_same_origin_candidates_receive_stable_content_order_ids():
+    class Table:
+        row_count = 1
+        col_count = 1
+        bbox = (10, 10, 90, 30)
+        cells = [(10, 10, 90, 30)]
+
+        def __init__(self, text):
+            self.text = text
+
+        def extract(self):
+            return [[self.text]]
+
+    class Finder:
+        def __init__(self, tables):
+            self.tables = tables
+
+    class Page:
+        rotation = 0
+        rect = pymupdf.Rect(0, 0, 100, 100)
+        mediabox = pymupdf.Rect(0, 0, 100, 100)
+
+        def __init__(self, order):
+            self.order = order
+
+        def get_drawings(self):
+            return [{}]
+
+        def get_text(self, kind):
+            return []
+
+        def find_tables(self):
+            return Finder([Table(item) for item in self.order])
+
+    first = extract_tables_from_page(Page(["Zeta", "Alpha"]), 1)
+    second = extract_tables_from_page(Page(["Alpha", "Zeta"]), 1)
+    assert [(item.table_id, item.cells[0].text) for item in first.candidates] == [
+        (item.table_id, item.cells[0].text) for item in second.candidates
+    ]
+    assert [item.cells[0].text for item in first.candidates] == ["Alpha", "Zeta"]
+
+
+def test_find_tables_exception_does_not_drop_parser_text_or_scoring_result():
+    from app.pdf_parser import parse_pdf_page
+
+    class FailingPage:
+        rotation = 0
+        rect = pymupdf.Rect(0, 0, 300, 200)
+        mediabox = pymupdf.Rect(0, 0, 300, 200)
+        derotation_matrix = pymupdf.Matrix(1, 1)
+
+        def get_text(self, kind):
+            return "Revenue remains stable.\n" if kind == "text" else []
+
+        def get_drawings(self):
+            return [{}]
+
+        def find_tables(self):
+            raise RuntimeError("fixture detector failure")
+
+    class Document:
+        def __init__(self):
+            self.page = FailingPage()
+
+        def load_page(self, index):
+            return self.page
+
+    parsed = parse_pdf_page(Document(), 0, "fixture", "fixture.pdf")
+    assert parsed.raw_text == "Revenue remains stable.\n"
+    assert parsed.score_breakdown is not None
+    assert any(item.code == "find_tables_failed" for item in parsed.table_diagnostics)
+
+
+def test_repeated_kpi_cards_preserve_heading_label_value_and_unresolved_semantics():
+    doc = pymupdf.open()
+    page = doc.new_page(width=500, height=250)
+    for y, group, value in ((70, "SEGMENT ALPHA", "£10m"), (150, "SEGMENT BETA", "£12m"), (220, "SEGMENT GAMMA", "£14m")):
+        page.insert_text((35, y), group, fontsize=9)
+        page.insert_text((235, y), "UNDERLYING OPERATING PROFIT", fontsize=9)
+        page.insert_text((235, y + 20), value, fontsize=9)
+    try:
+        result = extract_tables_from_page(page, page_number=5, allow_find_tables=False)
+        groups = [candidate for candidate in result.candidates if candidate.detection_method == TableDetectionMethod.LABEL_VALUE_GROUPS]
+        assert len(groups) == 1
+        candidate = groups[0]
+        assert candidate.confidence is None
+        assert any(d.code == "group_semantics_unresolved" for d in candidate.diagnostics)
+        by_row = {}
+        for cell in candidate.cells:
+            by_row.setdefault(cell.row_index, {})[cell.column_index] = cell
+        assert len(by_row) == 3
+        for row in by_row.values():
+            assert row[0].text.startswith("SEGMENT")
+            assert row[1].text == "UNDERLYING OPERATING PROFIT"
+            assert row[2].text.startswith("£")
+            assert row[0].bbox and row[1].bbox and row[2].bbox
+        assert any(d.code == "find_tables_skipped_workload" for d in result.diagnostics)
+    finally:
+        doc.close()
+
+
+def test_one_off_definition_pair_is_not_a_confident_group():
+    doc = pymupdf.open()
+    page = doc.new_page(width=400, height=160)
+    page.insert_text((35, 60), "OPERATING MARGIN", fontsize=9)
+    page.insert_text((35, 80), "12.5%", fontsize=9)
+    page.insert_text((35, 120), "Operating margin describes profitability.", fontsize=9)
+    try:
+        result = extract_tables_from_page(page, page_number=1, allow_find_tables=False)
+        assert not any(candidate.detection_method == TableDetectionMethod.LABEL_VALUE_GROUPS for candidate in result.candidates)
+    finally:
+        doc.close()
+
+
+def test_aligned_table_keeps_internal_subheading_and_header_row_traceable():
+    doc = pymupdf.open()
+    page = doc.new_page(width=420, height=250)
+    entries = [
+        (35, 45, "Measure"), (190, 45, "FY2024"), (300, 45, "FY2025"),
+        (35, 70, "Revenue"), (190, 70, "100"), (300, 70, "110"),
+        (35, 90, "Profit"), (190, 90, "20"), (300, 90, "25"),
+        (35, 110, "SEGMENT B"),
+        (35, 130, "Revenue"), (190, 130, "50"), (300, 130, "55"),
+        (35, 150, "Profit"), (190, 150, "10"), (300, 150, "12"),
+        (35, 170, "Margin"), (190, 170, "20%"), (300, 170, "21%"),
+    ]
+    for x, y, text in entries:
+        page.insert_text((x, y), text, fontsize=9)
+    try:
+        result = extract_tables_from_page(page, page_number=2, allow_find_tables=False)
+        candidates = [candidate for candidate in result.candidates if candidate.detection_method == TableDetectionMethod.WORD_GEOMETRY]
+        assert candidates
+        candidate = max(candidates, key=lambda item: len(item.cells))
+        assert any(cell.text == "SEGMENT B" for cell in candidate.cells)
+        assert any(d.code == "internal_subheading_retained" for d in candidate.diagnostics)
+        header_cells = [cell for cell in candidate.cells if cell.text in {"FY2024", "FY2025"}]
+        assert len(header_cells) == 2
+        for cell in header_cells:
+            governed = [value for value in candidate.cells if value.column_index == cell.column_index and value.row_index > cell.row_index]
+            assert governed
+    finally:
+        doc.close()
+
+
+@pytest.mark.parametrize("rotation", [180, 270])
+def test_rotations_180_and_270_keep_unrotated_bounded_geometry(rotation):
+    doc = _make_bordered_pdf(rotation=rotation)
+    try:
+        page = doc[0]
+        first = extract_tables_from_page(page, page_number=6)
+        second = extract_tables_from_page(page, page_number=6)
+        candidate = next(item for item in first.candidates if item.detection_method == TableDetectionMethod.PYMUPDF_FIND_TABLES)
+        plain = _make_bordered_pdf()
+        try:
+            baseline = extract_tables_from_page(plain[0], page_number=6).candidates[0]
+            assert candidate.bbox == pytest.approx(baseline.bbox)
+            assert [(cell.row_index, cell.column_index, cell.text) for cell in candidate.cells] == [
+                (cell.row_index, cell.column_index, cell.text) for cell in baseline.cells
+            ]
+            assert candidate.bbox[2] <= page.mediabox.width and candidate.bbox[3] <= page.mediabox.height
+            assert all(
+                cell.bbox is None or (
+                    0 <= cell.bbox[0] <= cell.bbox[2] <= page.mediabox.width
+                    and 0 <= cell.bbox[1] <= cell.bbox[3] <= page.mediabox.height
+                    and candidate.bbox[0] <= cell.bbox[0] <= cell.bbox[2] <= candidate.bbox[2]
+                    and candidate.bbox[1] <= cell.bbox[1] <= cell.bbox[3] <= candidate.bbox[3]
+                )
+                for cell in candidate.cells
+            )
+            assert candidate.model_dump_json() == next(item for item in second.candidates if item.detection_method == TableDetectionMethod.PYMUPDF_FIND_TABLES).model_dump_json()
+        finally:
+            plain.close()
     finally:
         doc.close()

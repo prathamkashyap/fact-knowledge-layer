@@ -10,7 +10,13 @@ import hashlib
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 import pymupdf as fitz
-from app.table_extraction import TableCandidate, TableDiagnostic, extract_tables_from_page
+from app.table_extraction import (
+    TableCandidate,
+    TableDiagnostic,
+    extract_tables_from_page,
+    measure_page_complexity,
+    table_detector_workload_allowed,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -203,26 +209,29 @@ def parse_pdf_page(
                 block_type=b[6],
             ))
 
-    # Detect tables: fast tabular layout heuristic from text rows with 3+ numbers,
-    # supplemented by PyMuPDF find_tables when drawing complexity is bounded
-    # to avoid O(chars x drawings) backtracking stalls on complex annual reports.
+    # Detect tables: retain the existing score signal and line heuristic, but
+    # gate PyMuPDF's expensive detector on bounded page complexity. The table
+    # adapter reuses this result when it is requested for scoring.
     has_tables = False
-    drawings_count: Optional[int] = None
+    words = page.get_text("words") or []
+    complexity = measure_page_complexity(page, raw_text=raw_text, words=words)
+    finder_result = None
+    finder_error = None
+    finder_was_called = False
     lines = raw_text.splitlines()
     tabular_lines = sum(1 for line in lines if len(re.findall(r'\b\d+(?:\.\d+)?\b', line)) >= 3)
     if tabular_lines >= 2:
         has_tables = True
     else:
-        # Keep the existing complexity guard: only inspect drawings on pages
-        # whose text does not already satisfy the legacy table heuristic.
-        try:
-            drawings_count = len(page.get_drawings())
-            if drawings_count is not None and 0 < drawings_count <= 30:
-                tables = page.find_tables()
-                if tables and len(tables.tables) > 0:
+        allowed, _ = table_detector_workload_allowed(complexity)
+        if allowed and callable(getattr(page, "find_tables", None)):
+            finder_was_called = True
+            try:
+                finder_result = page.find_tables()
+                if finder_result and len(getattr(finder_result, "tables", ()) or ()) > 0:
                     has_tables = True
-        except Exception:
-            has_tables = False
+            except Exception as exc:
+                finder_error = type(exc).__name__
 
     # Compute inspectable page score
     score_breakdown = compute_page_score(
@@ -236,7 +245,11 @@ def parse_pdf_page(
     table_result = extract_tables_from_page(
         page,
         page_number,
-        allow_find_tables=drawings_count is not None and 0 < drawings_count <= 30,
+        complexity=complexity,
+        words=words,
+        find_tables_result=finder_result,
+        find_tables_error=finder_error,
+        find_tables_was_called=finder_was_called,
     )
 
     return PageObject(

@@ -812,21 +812,15 @@ def _borderless_candidates(
     # only the longest local run of aligned rows, allowing one intervening
     # heading/baseline but not stitching distant page regions together.
     # Adjacent baselines are not enough to continue a run: two tables that are
-    # separated by whitespace only also land on neighbouring text lines, so the
-    # physical distance between the rows is required as well. A row whose
-    # value cells are all reporting periods is a header row, and a header row
-    # governs the rows below it, so it also ends the run above it.
+    # separated by whitespace only also land on neighbouring text lines. The
+    # row rhythm decides instead, and it is compared with the neighbouring
+    # rhythm rather than with a page-wide average. A row whose value cells are
+    # all reporting periods is a header row, and a header row governs the rows
+    # below it, so it also ends the run above it.
     row_extents = [
         _row_extent([box for _, box in row.values()]) for _, row in row_records
     ]
-    pitches = [
-        row_extents[index + 1][0] - row_extents[index][0]
-        for index in range(len(row_extents) - 1)
-        if row_extents[index + 1][0] > row_extents[index][0]
-    ]
-    local_pitch = median(pitches) if pitches else median(heights)
-    max_row_gap = max(2.0 * local_pitch, 3.0 * median(heights))
-    max_bridge_gap = max(3.5 * local_pitch, 5.0 * median(heights))
+    separated_pairs = _separated_row_pairs(_row_pitches(row_extents), median(heights))
     runs: list[list[tuple[int, dict[int, tuple[str, BoundingBox]]]]] = []
     for record_index, record in enumerate(row_records):
         if not runs:
@@ -835,15 +829,13 @@ def _borderless_candidates(
         previous = runs[-1][-1]
         gap = record[0] - previous[0]
         shared = set(record[1]) & set(previous[1])
-        vertical_gap = row_extents[record_index][0] - _row_extent(
-            [box for _, box in previous[1].values()]
-        )[1]
+        is_separated = (record_index - 1) in separated_pairs
         if _is_period_header_row(record[1]):
             # A header row governs the rows below it, so it always starts a
             # new block even when it follows the previous block immediately.
             runs.append([record])
             continue
-        if gap == 1 and len(shared) >= 2 and vertical_gap <= max_row_gap:
+        if gap == 1 and len(shared) >= 2 and not is_separated:
             runs[-1].append(record)
             continue
         between = segmented[previous[0] + 1:record[0]]
@@ -860,7 +852,7 @@ def _borderless_candidates(
             gap in {2, 3}
             and len(shared) >= 2
             and len(heading_rows) == gap - 1
-            and vertical_gap <= max_bridge_gap
+            and not is_separated
             and 0 in previous[1] and 0 in record[1]
             and abs(previous[1][0][1][0] - record[1][0][1][0]) <= max(20.0, median(heights) * 4)
         )
@@ -1011,19 +1003,15 @@ def _aligned_numeric_candidates(
             period_header_lines.append((line_index, tokens))
 
     # Keep local vertical runs. A row continues the previous run only when the
-    # columns continue and the rows are physically close: adjacent baselines
+    # columns continue and the local row rhythm continues: adjacent baselines
     # alone are not enough, because two separate tables can be separated by
-    # whitespace only and still land on neighbouring text lines.
+    # whitespace only and still land on neighbouring text lines. The rhythm is
+    # compared with the neighbouring rhythm rather than with a page-wide
+    # average, so one loosely spaced table does not change how a denser table
+    # on the same page is segmented.
     max_line_gap = max(3, round(28.0 / max(median(heights), 1.0)))
     row_extents = [_row_extent(_record_boxes(record)) for record in row_records]
-    pitches = [
-        row_extents[index + 1][0] - row_extents[index][0]
-        for index in range(len(row_extents) - 1)
-        if row_extents[index + 1][0] > row_extents[index][0]
-    ]
-    local_pitch = median(pitches) if pitches else median(heights)
-    max_row_gap = max(2.0 * local_pitch, 3.0 * median(heights))
-    max_bridge_gap = max(3.5 * local_pitch, 5.0 * median(heights))
+    separated_pairs = _separated_row_pairs(_row_pitches(row_extents), median(heights))
     runs: list[list[tuple[int, dict[int, list[tuple[BoundingBox, str]]], list[tuple[BoundingBox, str]]]]] = []
     for record_index, record in enumerate(row_records):
         if not runs:
@@ -1032,8 +1020,8 @@ def _aligned_numeric_candidates(
         previous = runs[-1][-1]
         gap = record[0] - previous[0]
         shared = set(record[1]) & set(previous[1])
-        vertical_gap = row_extents[record_index][0] - _row_extent(_record_boxes(previous))[1]
-        if gap == 1 and len(shared) >= 2 and vertical_gap <= max_row_gap:
+        is_separated = (record_index - 1) in separated_pairs
+        if gap == 1 and len(shared) >= 2 and not is_separated:
             runs[-1].append(record)
             continue
         intervening = lines[previous[0] + 1:record[0]]
@@ -1042,7 +1030,7 @@ def _aligned_numeric_candidates(
             and gap <= max_line_gap
             and len(shared) >= 2
             and bool(intervening)
-            and vertical_gap <= max_bridge_gap
+            and not is_separated
             and all(
                 not any(_looks_numeric(text) or _is_period_token(text) for _, text in line)
                 and (not line or max(box[2] for box, _ in line) < anchor_x[0] - tolerance)
@@ -1059,12 +1047,15 @@ def _aligned_numeric_candidates(
             runs.append([record])
 
     candidates = []
+    dropped_blocks = 0
     for run_index, run in enumerate(runs):
         if len(run) < 3:
+            dropped_blocks += 1
             continue
         # At least two numeric anchors must occur on most rows in this run.
         frequent = [anchor for anchor in range(len(anchor_x)) if sum(anchor in row[1] for row in run) >= max(3, (len(run) + 1) // 2)]
         if len(frequent) < 2:
+            dropped_blocks += 1
             continue
         first_anchor = anchor_x[min(frequent)]
         cells = []
@@ -1169,11 +1160,15 @@ def _aligned_numeric_candidates(
             )
             dropped = len(header_tokens) - len(mapping)
             one_to_one_expected = len(header_tokens) == len(column_positions)
-            if ambiguous or (one_to_one_expected and dropped > 0):
+            offsets_inconsistent = _header_offsets_inconsistent(
+                mapping, header_tokens, column_positions
+            )
+            if ambiguous or (one_to_one_expected and dropped > 0) or offsets_inconsistent:
                 aligned_diagnostics.append(_diagnostic(
                     "period_header_conflict",
-                    "Competing period tokens were found for the same numeric column; "
-                    "no header was selected and the period association remains unresolved.",
+                    "Competing period tokens were found for the same numeric column, or the "
+                    "tokens do not line up with the columns they would govern; no header was "
+                    "selected and the period association remains unresolved.",
                 ))
             elif len(mapping) >= 2:
                 shifted = [cell.model_copy(update={"row_index": cell.row_index + 1}) for cell in cells]
@@ -1184,13 +1179,22 @@ def _aligned_numeric_candidates(
                     anchor = ordered_anchors[position]
                     column = anchor - min(frequent) + 1
                     shifted.append(TableCell(row_index=0, column_index=column, text=text, bbox=box))
-                    all_boxes.append(box)
+                    if header_association_kind != "period_headers_associated_by_page_grid":
+                        all_boxes.append(box)
                 cells = sorted(shifted, key=lambda cell: (cell.row_index, cell.column_index))
                 aligned_diagnostics.append(_diagnostic(
                     header_association_kind,
                     f"A period header at text line {header_line_index} aligns with recurring numeric columns.",
                     DiagnosticSeverity.INFO,
                 ))
+                if header_association_kind == "period_headers_associated_by_page_grid":
+                    aligned_diagnostics.append(_diagnostic(
+                        "period_header_outside_candidate_region",
+                        "The governing period header lies outside this candidate's rows. Its source "
+                        "location is kept on the header cell, but it does not extend the candidate's "
+                        "region over the other table's rows.",
+                        DiagnosticSeverity.INFO,
+                    ))
                 if dropped > 0:
                     aligned_diagnostics.append(_diagnostic(
                         "period_header_incomplete",
@@ -1231,18 +1235,84 @@ def _aligned_numeric_candidates(
             diagnostics=aligned_diagnostics,
             cells=cells,
         ))
+    page_diagnostics = []
+    if dropped_blocks:
+        page_diagnostics.append(_diagnostic(
+            "aligned_numeric_block_dropped",
+            f"{dropped_blocks} row block(s) did not carry enough recurring numeric columns to "
+            "form a table and were left unresolved; they are not part of any candidate.",
+        ))
     if not candidates:
-        return [], [_diagnostic(
+        return [], [*page_diagnostics, _diagnostic(
             "aligned_numeric_candidate_abstained",
             "Aligned numeric anchors did not form a local repeated table region.",
             DiagnosticSeverity.INFO,
         )]
-    return candidates, []
+    return candidates, page_diagnostics
 
 
 def _row_extent(boxes: list[BoundingBox]) -> tuple[float, float]:
     """Return the vertical extent (top, bottom) of a row's source boxes."""
     return min(box[1] for box in boxes), max(box[3] for box in boxes)
+
+
+# A table boundary is recognised relative to the local row rhythm of the page.
+# A page-wide average cannot decide this: it is inflated by the very gap it
+# should detect when a page holds few rows, and it penalises a table whose own
+# rows are more widely spaced than another table on the same page.
+ROW_SEPARATION_FACTOR = 3.0
+ROW_SEPARATION_MINIMUM_FACTOR = 1.5
+
+# How far the offsets between a period header token and the column it labels
+# may differ from each other, as a fraction of the column spacing. A centred
+# header keeps a constant offset; a larger spread means the tokens cannot
+# explain one column each.
+HEADER_OFFSET_SPREAD_FACTOR = 0.6
+
+
+def _row_pitches(row_extents: list[tuple[float, float]]) -> list[float]:
+    """Distance between the tops of consecutive rows."""
+    return [
+        row_extents[index + 1][0] - row_extents[index][0]
+        for index in range(len(row_extents) - 1)
+    ]
+
+
+def _separated_row_pairs(pitches: list[float], height: float) -> set[int]:
+    """Indices of the row gaps that start a new block of rows.
+
+    ``pitches[index]`` is the distance between the top of row ``index`` and the
+    top of row ``index + 1``. A gap is treated as a table boundary when it is
+    much larger than the smallest pitch that surrounds it: a table keeps a
+    steady rhythm, so a jump of several times the neighbouring rhythm is a
+    different structure rather than the next row of the same one.
+
+    The comparison is with the neighbouring pitches rather than with a page
+    average, so the decision is local. One loosely spaced table therefore does
+    not change how a denser table on the same page is segmented, and a large
+    gap is still detected when the page holds only a few rows.
+    """
+    separated: set[int] = set()
+    count = len(pitches)
+    for index, pitch in enumerate(pitches):
+        if pitch <= 0:
+            continue
+        neighbours = [
+            pitches[other]
+            for other in (index - 1, index + 1)
+            if 0 <= other < count and pitches[other] > 0
+        ]
+        # With no neighbouring pitch there is no local rhythm to compare
+        # against; a generous multiple of the text height is used instead.
+        reference = min(neighbours) if neighbours else 4.0 * height
+        if reference <= 0:
+            continue
+        if (
+            pitch > ROW_SEPARATION_FACTOR * reference
+            and pitch > ROW_SEPARATION_MINIMUM_FACTOR * height
+        ):
+            separated.add(index)
+    return separated
 
 
 def _is_period_header_row(row: dict[int, tuple[str, BoundingBox]]) -> bool:
@@ -1410,6 +1480,44 @@ def _match_period_tokens(
     return mapping, ways > 1
 
 
+def _column_spacing(column_positions: list[float]) -> float:
+    """The typical distance between neighbouring numeric columns."""
+    if len(column_positions) < 2:
+        return 0.0
+    return median([
+        column_positions[index + 1] - column_positions[index]
+        for index in range(len(column_positions) - 1)
+    ])
+
+
+def _header_offsets_inconsistent(
+    mapping: list[tuple[int, int]],
+    tokens: list[tuple[BoundingBox, str]],
+    column_positions: list[float],
+) -> bool:
+    """True when a header assignment is not justified by the token geometry.
+
+    A period header is usually centred over its column while the values below
+    it are right-aligned, so every header token sits a similar distance to the
+    left of the column it labels. If the assigned offsets differ from each
+    other by more than a fraction of the column spacing, the tokens are
+    crowded together or spread apart in a way that one-token-per-column cannot
+    explain, and the assignment is not justified by the layout.
+    """
+    if len(mapping) < 2:
+        return False
+    offsets = []
+    for column_index, token_index in mapping:
+        box = tokens[token_index][0]
+        centre = (box[0] + box[2]) / 2
+        offsets.append(column_positions[column_index] - centre)
+    spread = max(offsets) - min(offsets)
+    spacing = _column_spacing(column_positions)
+    if spacing <= 0:
+        return False
+    return spread > HEADER_OFFSET_SPREAD_FACTOR * spacing
+
+
 def _group_words_into_lines(words: list[tuple[BoundingBox, str]], tolerance: float) -> list[list[tuple[BoundingBox, str]]]:
     ordered = sorted(words, key=lambda item: ((item[0][1] + item[0][3]) / 2, item[0][0]))
     groups: list[list[tuple[BoundingBox, str]]] = []
@@ -1485,7 +1593,7 @@ def _is_period_token(text: str) -> bool:
     return bool(
         re.fullmatch(r"(?i)(?:FY\s*)?(?:19|20)\d{2}(?:\s*[-/–—]\s*\d{2,4})?", value)
         or re.fullmatch(r"(?i)FY\s*\d{2,4}", value)
-        or re.fullmatch(r"(?i)Q[1-4](?:\s*FY?\s*\d{2,4})?", value)
+        or re.fullmatch(r"(?i)Q[1-4](?:\s*(?:FY)?\s*\d{2,4})?", value)
         or re.fullmatch(r"\d{1,2}/\d{1,2}/(?:19|20)\d{2}", value)
     )
 

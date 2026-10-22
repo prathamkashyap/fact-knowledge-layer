@@ -59,19 +59,34 @@ ambiguous. Unmatched and ambiguous structure must not be promoted to a `Fact`
 without a later, separately tested semantic mapping phase.
 
 Rows are grouped into one candidate only when the columns continue and the row
-rhythm continues. The boundary between two blocks of rows is decided locally: a
+rhythm continues. Two different detectors are used, because they answer
+different questions.
+
+*Row boundaries.* The boundary between two blocks of rows is decided locally: a
 gap is treated as a table boundary when it is more than three times the
 smallest row pitch that surrounds it, and never on a gap of less than one and a
 half text heights. A page-wide average is deliberately not used for this
 decision, because it is inflated by the very gap it should detect on a page
 with few rows, and because it would penalise a table whose own rows are more
-widely spaced than another table on the same page. A row block that is separated
-from the block above it by whitespace, or by a table of its own, is emitted as
-its own candidate; a block that is separated but does not independently carry
-enough recurring numeric columns is left unresolved and reported
-(`aligned_numeric_block_dropped`) rather than merged into a confident
-candidate. A row whose value cells are all reporting periods is a header row:
-it governs the rows below it and it ends the block above it.
+widely spaced than another table on the same page.
+
+*Heading bridges.* A bridge is a text-only line inside a table, such as a
+subheading, and it has its own, more permissive ceiling: the vertical gap it
+may span is at most three and a half times the same local row pitch, and never
+less than five text heights. A bridge therefore survives a subheading that is
+separated from the rows below it by more space than two table blocks would be,
+which the boundary rule would otherwise treat as a discontinuity. A bridge is
+only accepted with the structural evidence it needs: a plausible intervening
+heading line, continuing columns, and a continuing label position. A page-wide
+average is not reintroduced as the bridge reference.
+
+A row block that is separated from the block above it by whitespace, or by a
+table of its own, is emitted as its own candidate. A block that is separated but
+does not independently carry enough recurring numeric columns is left
+unresolved and reported (`aligned_numeric_block_dropped`) rather than merged
+into a confident candidate, so a candidate may be abstained from where the
+evidence does not reach it. A row whose value cells are all reporting periods
+is a header row: it governs the rows below it and it ends the block above it.
 
 A reporting period is recognised with or without a trailing footnote marker, so
 `2024*` is a period and not the number 2024. The marked text is preserved in the
@@ -84,14 +99,19 @@ edge; a centred header over a right-aligned value column is therefore attached
 to the column it labels. The assignment must also be justified by the header's
 own geometry: the offsets between the header tokens and the columns they
 govern may not differ from each other by more than 0.6 of the column spacing.
-When the tokens compete for one column, when they are crowded between the same
-two columns, or when a detected period header cannot govern the block, the
-association is reported (`period_header_conflict`,
-`period_header_not_associated`, `ambiguous_period_header`) and no header is
-attached. A single page-wide period row may also govern separated row blocks
-only when all of that block's recurring value columns receive an unambiguous
-period cell; the adapter retains separate row-block candidates and records that
-this association used the page-wide grid.
+The same policy applies to the gap-based path, which measures those offsets
+from the regions its columns occupy rather than from recurring numeric
+positions; a header whose column assignment the geometry cannot justify is
+reported there as well (`period_header_conflict`) and is not attached to a
+column. When the tokens compete for one column, when they are crowded between
+the same two columns, when one cell carries more than one period token, or
+when a detected period header cannot govern the block, the association is
+reported (`period_header_conflict`, `period_header_not_associated`,
+`ambiguous_period_header`) and the period association stays unresolved. A
+single page-wide period row may also govern separated row blocks only when all
+of that block's recurring value columns receive an unambiguous period cell; the
+adapter retains separate row-block candidates and records that this association
+used the page-wide grid.
 
 A candidate's bounding box covers the rows the candidate proposes. A period
 header that governs a block from elsewhere on the page is referenced by its own
@@ -99,14 +119,21 @@ cell and cell bounding box, and it does not extend the candidate's region over
 the other table's rows (`period_header_outside_candidate_region`). Competing
 or partial headers remain unresolved.
 
+The behaviour described here is bounded by the synthetic layouts in the test
+suite. It is not a claim of general PDF-table coverage.
+
 ## Known remaining limits
 
+* Dot leaders and other filler between a label and its value defeat the
+  gap-based column model, because the leader fills the whitespace the gap
+  detector measures. Such tables are not reconstructed by that path.
 * The KPI label/value-group detector only recognises upper-case labels that
   are left-aligned with their value on the following line. Title-case,
   sentence-case, right-aligned and same-line label/value cards are not
   detected.
 * A wrapped row label is reported as unresolved; the preceding line's words are
-  not merged back onto the row.
+  not merged back onto the row. In dense layouts the diagnostic is also raised
+  for rows that are not wrapped, so it is not a reliable signal on its own.
 * Multi-level headers are not represented as a header path. A header line that
   carries more period tokens than the candidate has value columns is attached
   only when the assignment is unambiguous; otherwise the period association

@@ -820,7 +820,9 @@ def _borderless_candidates(
     row_extents = [
         _row_extent([box for _, box in row.values()]) for _, row in row_records
     ]
-    separated_pairs = _separated_row_pairs(_row_pitches(row_extents), median(heights))
+    row_pitches = _row_pitches(row_extents)
+    row_references = _row_pitch_references(row_pitches, median(heights))
+    separated_pairs = _separated_row_pairs(row_pitches, row_references, median(heights))
     runs: list[list[tuple[int, dict[int, tuple[str, BoundingBox]]]]] = []
     for record_index, record in enumerate(row_records):
         if not runs:
@@ -848,11 +850,14 @@ def _borderless_candidates(
             heading_column = sum(boundary < center for boundary in boundaries)
             if heading_column == 0 and not _looks_numeric(heading_text) and not _is_period_token(heading_text):
                 heading_rows.append((heading_index, {0: (heading_text, heading_box)}))
+        vertical_gap = row_extents[record_index][0] - _row_extent(
+            [box for _, box in previous[1].values()]
+        )[1]
         bridge = (
             gap in {2, 3}
             and len(shared) >= 2
             and len(heading_rows) == gap - 1
-            and not is_separated
+            and vertical_gap <= _bridge_ceiling(row_references[record_index - 1], median(heights))
             and 0 in previous[1] and 0 in record[1]
             and abs(previous[1][0][1][0] - record[1][0][1][0]) <= max(20.0, median(heights) * 4)
         )
@@ -876,7 +881,7 @@ def _borderless_candidates(
         for row_index, (_, row) in enumerate(run):
             for col, (text, cell_box) in row.items():
                 cells.append(TableCell(row_index=row_index, column_index=col, text=text, bbox=cell_box))
-        cells, header_note = _align_period_header_row(cells)
+        cells, header_note, header_conflict = _align_period_header_row(cells)
         diagnostics = [
             _diagnostic(
                 "borderless_repeated_structure",
@@ -886,6 +891,13 @@ def _borderless_candidates(
         ]
         if header_note:
             diagnostics.append(_diagnostic("period_header_alignment", header_note, DiagnosticSeverity.INFO))
+        if header_conflict:
+            diagnostics.append(_diagnostic(
+                "period_header_conflict",
+                "The period header of this row cannot be assigned to a single column from the "
+                "geometry; the header keeps the columns the grid gave it and the period "
+                "association remains unresolved.",
+            ))
         if any(len(row) == 1 and 0 in row for _, row in run):
             diagnostics.append(_diagnostic(
                 "internal_subheading_retained",
@@ -1011,7 +1023,9 @@ def _aligned_numeric_candidates(
     # on the same page is segmented.
     max_line_gap = max(3, round(28.0 / max(median(heights), 1.0)))
     row_extents = [_row_extent(_record_boxes(record)) for record in row_records]
-    separated_pairs = _separated_row_pairs(_row_pitches(row_extents), median(heights))
+    row_pitches = _row_pitches(row_extents)
+    row_references = _row_pitch_references(row_pitches, median(heights))
+    separated_pairs = _separated_row_pairs(row_pitches, row_references, median(heights))
     runs: list[list[tuple[int, dict[int, list[tuple[BoundingBox, str]]], list[tuple[BoundingBox, str]]]]] = []
     for record_index, record in enumerate(row_records):
         if not runs:
@@ -1025,12 +1039,13 @@ def _aligned_numeric_candidates(
             runs[-1].append(record)
             continue
         intervening = lines[previous[0] + 1:record[0]]
+        vertical_gap = row_extents[record_index][0] - _row_extent(_record_boxes(previous))[1]
         bridge = (
             gap in {2, 3}
             and gap <= max_line_gap
             and len(shared) >= 2
             and bool(intervening)
-            and not is_separated
+            and vertical_gap <= _bridge_ceiling(row_references[record_index - 1], median(heights))
             and all(
                 not any(_looks_numeric(text) or _is_period_token(text) for _, text in line)
                 and (not line or max(box[2] for box, _ in line) < anchor_x[0] - tolerance)
@@ -1160,8 +1175,14 @@ def _aligned_numeric_candidates(
             )
             dropped = len(header_tokens) - len(mapping)
             one_to_one_expected = len(header_tokens) == len(column_positions)
+            offsets = [
+                column_positions[position] - (
+                    (header_tokens[token_index][0][0] + header_tokens[token_index][0][2]) / 2
+                )
+                for position, token_index in mapping
+            ]
             offsets_inconsistent = _header_offsets_inconsistent(
-                mapping, header_tokens, column_positions
+                offsets, _column_spacing(column_positions)
             )
             if ambiguous or (one_to_one_expected and dropped > 0) or offsets_inconsistent:
                 aligned_diagnostics.append(_diagnostic(
@@ -1263,6 +1284,14 @@ def _row_extent(boxes: list[BoundingBox]) -> tuple[float, float]:
 ROW_SEPARATION_FACTOR = 3.0
 ROW_SEPARATION_MINIMUM_FACTOR = 1.5
 
+# A heading bridge is judged separately from a table boundary. A table may
+# carry an internal subheading that is separated from the rows below it by
+# more vertical space than two table blocks would be, so the bridge keeps its
+# own, more permissive ceiling. The reference is the same local row pitch the
+# separation rule uses; the page-wide median is not reintroduced.
+ROW_BRIDGE_FACTOR = 3.5
+ROW_BRIDGE_MINIMUM_FACTOR = 5.0
+
 # How far the offsets between a period header token and the column it labels
 # may differ from each other, as a fraction of the column spacing. A centred
 # header keeps a constant offset; a larger spread means the tokens cannot
@@ -1278,7 +1307,32 @@ def _row_pitches(row_extents: list[tuple[float, float]]) -> list[float]:
     ]
 
 
-def _separated_row_pairs(pitches: list[float], height: float) -> set[int]:
+def _row_pitch_references(pitches: list[float], height: float) -> list[float]:
+    """The local row-pitch reference for each gap between consecutive rows.
+
+    The reference is the smallest neighbouring pitch, so the comparison stays
+    local: one loosely spaced table therefore does not change how a denser
+    table on the same page is judged. A gap with no neighbouring pitch has no
+    local rhythm to compare against and uses a generous multiple of the text
+    height instead.
+    """
+    count = len(pitches)
+    references = []
+    for index in range(count):
+        neighbours = [
+            pitches[other]
+            for other in (index - 1, index + 1)
+            if 0 <= other < count and pitches[other] > 0
+        ]
+        references.append(min(neighbours) if neighbours else 4.0 * height)
+    return references
+
+
+def _separated_row_pairs(
+    pitches: list[float],
+    references: list[float],
+    height: float,
+) -> set[int]:
     """Indices of the row gaps that start a new block of rows.
 
     ``pitches[index]`` is the distance between the top of row ``index`` and the
@@ -1286,25 +1340,12 @@ def _separated_row_pairs(pitches: list[float], height: float) -> set[int]:
     much larger than the smallest pitch that surrounds it: a table keeps a
     steady rhythm, so a jump of several times the neighbouring rhythm is a
     different structure rather than the next row of the same one.
-
-    The comparison is with the neighbouring pitches rather than with a page
-    average, so the decision is local. One loosely spaced table therefore does
-    not change how a denser table on the same page is segmented, and a large
-    gap is still detected when the page holds only a few rows.
     """
     separated: set[int] = set()
-    count = len(pitches)
     for index, pitch in enumerate(pitches):
         if pitch <= 0:
             continue
-        neighbours = [
-            pitches[other]
-            for other in (index - 1, index + 1)
-            if 0 <= other < count and pitches[other] > 0
-        ]
-        # With no neighbouring pitch there is no local rhythm to compare
-        # against; a generous multiple of the text height is used instead.
-        reference = min(neighbours) if neighbours else 4.0 * height
+        reference = references[index]
         if reference <= 0:
             continue
         if (
@@ -1313,6 +1354,16 @@ def _separated_row_pairs(pitches: list[float], height: float) -> set[int]:
         ):
             separated.add(index)
     return separated
+
+
+def _bridge_ceiling(reference: float, height: float) -> float:
+    """The largest vertical gap a heading bridge may span.
+
+    The gap is measured from the bottom of the row above the bridge to the top
+    of the row below it, which is the same measure the earlier absolute
+    ceiling used, so a legitimate subheading keeps the separation it had.
+    """
+    return max(ROW_BRIDGE_FACTOR * reference, ROW_BRIDGE_MINIMUM_FACTOR * height)
 
 
 def _is_period_header_row(row: dict[int, tuple[str, BoundingBox]]) -> bool:
@@ -1330,7 +1381,17 @@ def _is_period_header_row(row: dict[int, tuple[str, BoundingBox]]) -> bool:
     return label is not None and not _looks_numeric(label[0])
 
 
-def _align_period_header_row(cells: list[TableCell]) -> tuple[list[TableCell], Optional[str]]:
+def _period_tokens_in(text: str) -> list[str]:
+    """The reporting-period tokens inside a cell's text.
+
+    A cell that carries more than one of them cannot label a single column.
+    """
+    return [token for token in text.split() if _is_period_token(token)]
+
+
+def _align_period_header_row(
+    cells: list[TableCell],
+) -> tuple[list[TableCell], Optional[str], bool]:
     """Attach a header row's period tokens to the columns they govern.
 
     A period header is often centred over its column while the values below
@@ -1340,11 +1401,19 @@ def _align_period_header_row(cells: list[TableCell]) -> tuple[list[TableCell], O
     columns, the tokens are attached to those columns in reading order, which
     is the only reliable link between a centred header and its values.
 
+    The attachment is only made when the geometry justifies it. The same
+    policy as the right-aligned path applies: the offsets between the header
+    tokens and the columns they would govern must agree within a fraction of
+    the column spacing, and a header cell that carries more than one period
+    token cannot label a single column. When the geometry does not justify
+    the attachment, the header keeps the columns the grid gave it, the
+    conflict is reported, and the period association stays unresolved.
+
     The original header text is preserved; only the column it is attached to
     can change, and the change is reported.
     """
     if not cells:
-        return cells, None
+        return cells, None, False
     by_row: dict[int, list[TableCell]] = {}
     for cell in cells:
         by_row.setdefault(cell.row_index, []).append(cell)
@@ -1355,16 +1424,61 @@ def _align_period_header_row(cells: list[TableCell]) -> tuple[list[TableCell], O
         if cell.column_index > 0 and not _is_period_token(cell.text)
     })
     if len(value_columns) < 2:
-        return cells, None
+        return cells, None, False
+    # The horizontal region each value column occupies, and the spacing
+    # between those regions, are the geometry this path has to work with.
+    regions: dict[int, tuple[float, float]] = {}
+    for row_cells in by_row.values():
+        for cell in row_cells:
+            if cell.column_index <= 0 or cell.bbox is None:
+                continue
+            if _is_period_token(cell.text):
+                continue
+            left, right = regions.get(cell.column_index, (cell.bbox[0], cell.bbox[2]))
+            regions[cell.column_index] = (min(left, cell.bbox[0]), max(right, cell.bbox[2]))
+    column_centres = [
+        (regions[column][0] + regions[column][1]) / 2 for column in value_columns
+    ]
+    column_spacing = median([
+        column_centres[index + 1] - column_centres[index]
+        for index in range(len(column_centres) - 1)
+    ]) if len(column_centres) > 1 else 0.0
     adjusted: list[TableCell] = []
     note = None
+    conflict = False
     for row_index, row_cells in by_row.items():
         header_cells = sorted(
             (cell for cell in row_cells if cell.column_index > 0 and _is_period_token(cell.text)),
             key=lambda cell: ((cell.bbox[0] + cell.bbox[2]) / 2) if cell.bbox else cell.column_index,
         )
+        value_row_cells = [cell for cell in row_cells if cell.column_index > 0]
+        # A row whose value cells consist only of reporting periods is a header
+        # row. One such cell that carries more than one of them cannot label a
+        # single column, so the header stays unresolved.
+        header_candidate = bool(value_row_cells) and all(
+            _period_tokens_in(cell.text) for cell in value_row_cells
+        )
+        ambiguous_cell = header_candidate and any(
+            len(_period_tokens_in(cell.text)) > 1 for cell in value_row_cells
+        )
         other_cells = [cell for cell in row_cells if cell not in header_cells]
+        if ambiguous_cell:
+            # One cell carries more than one period token, so it cannot label
+            # a single column and the header stays unresolved.
+            conflict = True
+            adjusted.extend(header_cells)
+            adjusted.extend(other_cells)
+            continue
         if len(header_cells) >= 2 and len(header_cells) == len(value_columns):
+            offsets = []
+            for token_cell, column in zip(header_cells, value_columns):
+                centre = ((token_cell.bbox[0] + token_cell.bbox[2]) / 2) if token_cell.bbox else 0.0
+                offsets.append(column_centres[value_columns.index(column)] - centre)
+            if _header_offsets_inconsistent(offsets, column_spacing):
+                conflict = True
+                adjusted.extend(header_cells)
+                adjusted.extend(other_cells)
+                continue
             for token_cell, target_column in zip(header_cells, value_columns):
                 if token_cell.column_index != target_column:
                     note = (
@@ -1376,7 +1490,7 @@ def _align_period_header_row(cells: list[TableCell]) -> tuple[list[TableCell], O
             adjusted.extend(header_cells)
         adjusted.extend(other_cells)
     adjusted.sort(key=lambda cell: (cell.row_index, cell.column_index))
-    return adjusted, note
+    return adjusted, note, conflict
 
 
 def _record_boxes(record) -> list[BoundingBox]:
@@ -1490,11 +1604,7 @@ def _column_spacing(column_positions: list[float]) -> float:
     ])
 
 
-def _header_offsets_inconsistent(
-    mapping: list[tuple[int, int]],
-    tokens: list[tuple[BoundingBox, str]],
-    column_positions: list[float],
-) -> bool:
+def _header_offsets_inconsistent(offsets: list[float], spacing: float) -> bool:
     """True when a header assignment is not justified by the token geometry.
 
     A period header is usually centred over its column while the values below
@@ -1503,18 +1613,17 @@ def _header_offsets_inconsistent(
     other by more than a fraction of the column spacing, the tokens are
     crowded together or spread apart in a way that one-token-per-column cannot
     explain, and the assignment is not justified by the layout.
+
+    The offsets and the spacing are supplied by the caller, because the two
+    candidate paths measure them from different geometry: the right-aligned
+    path from the recurring numeric column positions, the gap-based path from
+    the regions its columns occupy.
     """
-    if len(mapping) < 2:
+    if len(offsets) < 2:
         return False
-    offsets = []
-    for column_index, token_index in mapping:
-        box = tokens[token_index][0]
-        centre = (box[0] + box[2]) / 2
-        offsets.append(column_positions[column_index] - centre)
-    spread = max(offsets) - min(offsets)
-    spacing = _column_spacing(column_positions)
     if spacing <= 0:
         return False
+    spread = max(offsets) - min(offsets)
     return spread > HEADER_OFFSET_SPREAD_FACTOR * spacing
 
 

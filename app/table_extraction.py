@@ -9,6 +9,7 @@ it can map a context into a production fact.
 
 from decimal import Decimal
 from enum import Enum
+from functools import lru_cache
 import math
 import re
 from statistics import median
@@ -129,6 +130,14 @@ MAX_FIND_TABLES_TEXT_CHARS = 20_000
 
 
 def measure_page_complexity(page: Any, raw_text: Optional[str] = None, words: Optional[list] = None) -> PageComplexity:
+    """Measure the page properties the workload guard needs.
+
+    Text volume is measured first. Enumerating vector drawings is the most
+    expensive of these measurements on vector-heavy pages, so it is deferred
+    until the page's text volume is known to be inside the workload bounds.
+    A page outside those bounds is already excluded from the costly detector,
+    so it does not pay for the drawing measurement.
+    """
     measurements = PageComplexity()
     if raw_text is None:
         try:
@@ -144,10 +153,18 @@ def measure_page_complexity(page: Any, raw_text: Optional[str] = None, words: Op
             measurements.measurement_errors.append(f"words:{type(exc).__name__}")
     if words is not None:
         measurements.word_count = len(words)
-    try:
-        measurements.drawing_count = len(page.get_drawings())
-    except Exception as exc:
-        measurements.measurement_errors.append(f"drawings:{type(exc).__name__}")
+    within_text_bounds = (
+        measurements.measurement_errors == []
+        and measurements.word_count is not None
+        and measurements.text_char_count is not None
+        and measurements.word_count <= MAX_FIND_TABLES_WORDS
+        and measurements.text_char_count <= MAX_FIND_TABLES_TEXT_CHARS
+    )
+    if within_text_bounds:
+        try:
+            measurements.drawing_count = len(page.get_drawings())
+        except Exception as exc:
+            measurements.measurement_errors.append(f"drawings:{type(exc).__name__}")
     return measurements
 
 
@@ -155,16 +172,18 @@ def table_detector_workload_allowed(complexity: PageComplexity) -> tuple[bool, s
     """Apply fixed workload bounds; missing measurements abstain from the costly detector."""
     if complexity.measurement_errors:
         return False, "measurement_failed"
-    if complexity.drawing_count is None or complexity.word_count is None or complexity.text_char_count is None:
+    if complexity.word_count is None or complexity.text_char_count is None:
+        return False, "measurement_unavailable"
+    if complexity.word_count > MAX_FIND_TABLES_WORDS:
+        return False, "word_limit"
+    if complexity.text_char_count > MAX_FIND_TABLES_TEXT_CHARS:
+        return False, "text_limit"
+    if complexity.drawing_count is None:
         return False, "measurement_unavailable"
     if complexity.drawing_count == 0:
         return False, "no_vector_drawings"
     if complexity.drawing_count > MAX_FIND_TABLES_DRAWINGS:
         return False, "drawing_limit"
-    if complexity.word_count > MAX_FIND_TABLES_WORDS:
-        return False, "word_limit"
-    if complexity.text_char_count > MAX_FIND_TABLES_TEXT_CHARS:
-        return False, "text_limit"
     return True, "within_limits"
 
 
@@ -747,6 +766,7 @@ def _borderless_candidates(
 
     row_records = []
     numeric_rows = 0
+    conflicting_rows = []
     for line_index, (line, segments) in enumerate(segmented):
         if not segments:
             continue
@@ -757,6 +777,7 @@ def _borderless_candidates(
             if column in row_cells:
                 # Conflicting segments in one inferred column make this row
                 # unresolved; do not concatenate across a dubious boundary.
+                conflicting_rows.append(line_index)
                 row_cells = {}
                 break
             row_cells[column] = (text, box)
@@ -765,15 +786,23 @@ def _borderless_candidates(
             numeric_rows += int(has_numeric_value)
             row_records.append((line_index, row_cells))
 
+    conflict_diagnostics = []
+    if conflicting_rows:
+        conflict_diagnostics.append(_diagnostic(
+            "ambiguous_column_boundary",
+            f"{len(conflicting_rows)} row(s) placed several segments in one inferred column and "
+            "were left unresolved; the dropped rows are not part of any candidate.",
+        ))
+
     if len(row_records) < 3 or numeric_rows < 2:
         aligned, aligned_diagnostics = _aligned_numeric_candidates(page_number, parsed, heights, bordered)
         if aligned:
-            return aligned, [_diagnostic(
+            return aligned, [*conflict_diagnostics, _diagnostic(
                 "gap_grid_abstained",
                 "Gap-based column segmentation was insufficient; repeated numeric alignment supplied the candidate grid.",
                 DiagnosticSeverity.INFO,
             )]
-        return [], [_diagnostic(
+        return [], [*conflict_diagnostics, _diagnostic(
             "borderless_structure_insufficient",
             "Repeated gaps were found, but at least three aligned rows and numeric values in two rows are required.",
             DiagnosticSeverity.INFO,
@@ -782,15 +811,39 @@ def _borderless_candidates(
     # A broad page-wide cluster of gaps can combine unrelated prose. Retain
     # only the longest local run of aligned rows, allowing one intervening
     # heading/baseline but not stitching distant page regions together.
+    # Adjacent baselines are not enough to continue a run: two tables that are
+    # separated by whitespace only also land on neighbouring text lines, so the
+    # physical distance between the rows is required as well. A row whose
+    # value cells are all reporting periods is a header row, and a header row
+    # governs the rows below it, so it also ends the run above it.
+    row_extents = [
+        _row_extent([box for _, box in row.values()]) for _, row in row_records
+    ]
+    pitches = [
+        row_extents[index + 1][0] - row_extents[index][0]
+        for index in range(len(row_extents) - 1)
+        if row_extents[index + 1][0] > row_extents[index][0]
+    ]
+    local_pitch = median(pitches) if pitches else median(heights)
+    max_row_gap = max(2.0 * local_pitch, 3.0 * median(heights))
+    max_bridge_gap = max(3.5 * local_pitch, 5.0 * median(heights))
     runs: list[list[tuple[int, dict[int, tuple[str, BoundingBox]]]]] = []
-    for record in row_records:
+    for record_index, record in enumerate(row_records):
         if not runs:
             runs.append([record])
             continue
         previous = runs[-1][-1]
         gap = record[0] - previous[0]
         shared = set(record[1]) & set(previous[1])
-        if gap == 1 and len(shared) >= 2:
+        vertical_gap = row_extents[record_index][0] - _row_extent(
+            [box for _, box in previous[1].values()]
+        )[1]
+        if _is_period_header_row(record[1]):
+            # A header row governs the rows below it, so it always starts a
+            # new block even when it follows the previous block immediately.
+            runs.append([record])
+            continue
+        if gap == 1 and len(shared) >= 2 and vertical_gap <= max_row_gap:
             runs[-1].append(record)
             continue
         between = segmented[previous[0] + 1:record[0]]
@@ -807,6 +860,7 @@ def _borderless_candidates(
             gap in {2, 3}
             and len(shared) >= 2
             and len(heading_rows) == gap - 1
+            and vertical_gap <= max_bridge_gap
             and 0 in previous[1] and 0 in record[1]
             and abs(previous[1][0][1][0] - record[1][0][1][0]) <= max(20.0, median(heights) * 4)
         )
@@ -830,6 +884,7 @@ def _borderless_candidates(
         for row_index, (_, row) in enumerate(run):
             for col, (text, cell_box) in row.items():
                 cells.append(TableCell(row_index=row_index, column_index=col, text=text, bbox=cell_box))
+        cells, header_note = _align_period_header_row(cells)
         diagnostics = [
             _diagnostic(
                 "borderless_repeated_structure",
@@ -837,6 +892,8 @@ def _borderless_candidates(
                 DiagnosticSeverity.INFO,
             )
         ]
+        if header_note:
+            diagnostics.append(_diagnostic("period_header_alignment", header_note, DiagnosticSeverity.INFO))
         if any(len(row) == 1 and 0 in row for _, row in run):
             diagnostics.append(_diagnostic(
                 "internal_subheading_retained",
@@ -863,17 +920,17 @@ def _borderless_candidates(
     if not candidates:
         aligned, aligned_diagnostics = _aligned_numeric_candidates(page_number, parsed, heights, bordered)
         if aligned:
-            return aligned, [_diagnostic(
+            return aligned, [*conflict_diagnostics, _diagnostic(
                 "gap_grid_abstained",
                 "Gap-based segmentation did not form a local grid; repeated numeric alignment supplied the candidate grid.",
                 DiagnosticSeverity.INFO,
             )]
-        return [], [_diagnostic(
+        return [], [*conflict_diagnostics, _diagnostic(
             "borderless_candidate_abstained",
             "Page geometry did not yield a locally repeated grid with sufficient numeric structure.",
             DiagnosticSeverity.INFO,
         ), *aligned_diagnostics]
-    return candidates, []
+    return candidates, conflict_diagnostics
 
 
 def _aligned_numeric_candidates(
@@ -941,31 +998,42 @@ def _aligned_numeric_candidates(
             DiagnosticSeverity.INFO,
         )]
 
-    period_headers = []
+    # Period header lines are collected as source tokens. Which column a token
+    # governs is decided later, per candidate, because only a candidate knows
+    # which numeric columns it actually covers.
+    period_header_lines = []
     for line_index, line in enumerate(lines):
-        periods = [(box, text) for box, text in line if _is_period_token(text)]
-        assignments = {}
-        for box, text in periods:
-            center = (box[0] + box[2]) / 2
-            nearest = min(range(len(anchor_x)), key=lambda i: abs(anchor_x[i] - center))
-            if abs(anchor_x[nearest] - center) <= max(12.0, median(heights) * 2.5):
-                assignments[nearest] = (box, text)
-        if len(assignments) >= 2:
-            period_headers.append((line_index, assignments))
+        tokens = sorted(
+            ((box, text) for box, text in line if _is_period_token(text)),
+            key=lambda item: (item[0][0] + item[0][2]) / 2,
+        )
+        if len(tokens) >= 2:
+            period_header_lines.append((line_index, tokens))
 
-    # Keep local vertical runs. A single internal text-only subheading may be
-    # retained only when two or more right-edge anchors and the left label
-    # region continue on both sides; vertical proximity alone is insufficient.
+    # Keep local vertical runs. A row continues the previous run only when the
+    # columns continue and the rows are physically close: adjacent baselines
+    # alone are not enough, because two separate tables can be separated by
+    # whitespace only and still land on neighbouring text lines.
     max_line_gap = max(3, round(28.0 / max(median(heights), 1.0)))
+    row_extents = [_row_extent(_record_boxes(record)) for record in row_records]
+    pitches = [
+        row_extents[index + 1][0] - row_extents[index][0]
+        for index in range(len(row_extents) - 1)
+        if row_extents[index + 1][0] > row_extents[index][0]
+    ]
+    local_pitch = median(pitches) if pitches else median(heights)
+    max_row_gap = max(2.0 * local_pitch, 3.0 * median(heights))
+    max_bridge_gap = max(3.5 * local_pitch, 5.0 * median(heights))
     runs: list[list[tuple[int, dict[int, list[tuple[BoundingBox, str]]], list[tuple[BoundingBox, str]]]]] = []
-    for record in row_records:
+    for record_index, record in enumerate(row_records):
         if not runs:
             runs.append([record])
             continue
         previous = runs[-1][-1]
         gap = record[0] - previous[0]
         shared = set(record[1]) & set(previous[1])
-        if gap == 1 and len(shared) >= 2:
+        vertical_gap = row_extents[record_index][0] - _row_extent(_record_boxes(previous))[1]
+        if gap == 1 and len(shared) >= 2 and vertical_gap <= max_row_gap:
             runs[-1].append(record)
             continue
         intervening = lines[previous[0] + 1:record[0]]
@@ -974,6 +1042,7 @@ def _aligned_numeric_candidates(
             and gap <= max_line_gap
             and len(shared) >= 2
             and bool(intervening)
+            and vertical_gap <= max_bridge_gap
             and all(
                 not any(_looks_numeric(text) or _is_period_token(text) for _, text in line)
                 and (not line or max(box[2] for box, _ in line) < anchor_x[0] - tolerance)
@@ -1065,37 +1134,81 @@ def _aligned_numeric_candidates(
             for box, _ in values
         )
         header_distance_limit = max(48.0, median(heights) * 6.0)
+        # The recurring columns of this candidate, in left-to-right order.
+        ordered_anchors = sorted(frequent, key=lambda anchor: anchor_x[anchor])
+        column_positions = [anchor_x[anchor] for anchor in ordered_anchors]
+        header_tolerance = _header_match_tolerance(column_positions, median(heights))
         matching_headers = [
-            header for header in period_headers
-            if 0 <= first_value_top - max(box[3] for box, _ in header[1].values()) <= header_distance_limit
+            (line_index, tokens) for line_index, tokens in period_header_lines
+            if 0 <= first_value_top - max(box[3] for box, _ in tokens) <= header_distance_limit
         ]
         header_association_kind = "period_headers_associated_by_alignment"
-        if not matching_headers and len(period_headers) == 1:
-            # A page-wide header may govern multiple separated row blocks of a
-            # single table. Require every recurring numeric column to have an
-            # unambiguous period token at its own aligned x position.
-            global_header = period_headers[0]
-            if set(global_header[1]) == set(frequent):
-                matching_headers = [global_header]
-                header_association_kind = "period_headers_associated_by_page_grid"
+        selected_header = None
         if len(matching_headers) == 1:
-            header_line_index, header_values = matching_headers[0]
-            shifted = [cell.model_copy(update={"row_index": cell.row_index + 1}) for cell in cells]
-            for anchor, (box, text) in header_values.items():
-                if anchor in frequent:
-                    column = anchor - min(frequent) + 1
-                    shifted.append(TableCell(row_index=0, column_index=column, text=text, bbox=box))
-                    all_boxes.append(box)
-            cells = sorted(shifted, key=lambda cell: (cell.row_index, cell.column_index))
-            aligned_diagnostics.append(_diagnostic(
-                header_association_kind,
-                f"A period header at text line {header_line_index} aligns with recurring numeric columns.",
-                DiagnosticSeverity.INFO,
-            ))
+            selected_header = matching_headers[0]
         elif len(matching_headers) > 1:
             aligned_diagnostics.append(_diagnostic(
                 "ambiguous_period_header",
                 "Multiple nearby period headers align with numeric columns; no header was selected.",
+            ))
+        elif len(period_header_lines) == 1:
+            # A page-wide header may govern multiple separated row blocks of a
+            # single table. It is accepted only when every recurring numeric
+            # column of this candidate receives an unambiguous period token.
+            global_header = period_header_lines[0]
+            mapping, ambiguous = _match_period_tokens(
+                global_header[1], column_positions, header_tolerance
+            )
+            if not ambiguous and len(mapping) == len(column_positions):
+                selected_header = global_header
+                header_association_kind = "period_headers_associated_by_page_grid"
+        if selected_header is not None:
+            header_line_index, header_tokens = selected_header
+            mapping, ambiguous = _match_period_tokens(
+                header_tokens, column_positions, header_tolerance
+            )
+            dropped = len(header_tokens) - len(mapping)
+            one_to_one_expected = len(header_tokens) == len(column_positions)
+            if ambiguous or (one_to_one_expected and dropped > 0):
+                aligned_diagnostics.append(_diagnostic(
+                    "period_header_conflict",
+                    "Competing period tokens were found for the same numeric column; "
+                    "no header was selected and the period association remains unresolved.",
+                ))
+            elif len(mapping) >= 2:
+                shifted = [cell.model_copy(update={"row_index": cell.row_index + 1}) for cell in cells]
+                for position, token_index in mapping:
+                    box, text = header_tokens[token_index]
+                    # The header uses the same column numbering as the value
+                    # cells, so a header always governs its own column.
+                    anchor = ordered_anchors[position]
+                    column = anchor - min(frequent) + 1
+                    shifted.append(TableCell(row_index=0, column_index=column, text=text, bbox=box))
+                    all_boxes.append(box)
+                cells = sorted(shifted, key=lambda cell: (cell.row_index, cell.column_index))
+                aligned_diagnostics.append(_diagnostic(
+                    header_association_kind,
+                    f"A period header at text line {header_line_index} aligns with recurring numeric columns.",
+                    DiagnosticSeverity.INFO,
+                ))
+                if dropped > 0:
+                    aligned_diagnostics.append(_diagnostic(
+                        "period_header_incomplete",
+                        "Some period tokens on the selected header line do not govern a column "
+                        "of this candidate; they were not attached.",
+                        DiagnosticSeverity.INFO,
+                    ))
+            else:
+                aligned_diagnostics.append(_diagnostic(
+                    "period_header_not_associated",
+                    "A period header line was detected but does not unambiguously govern this "
+                    "candidate's numeric columns; the period association remains unresolved.",
+                ))
+        elif period_header_lines:
+            aligned_diagnostics.append(_diagnostic(
+                "period_header_not_associated",
+                "A period header line was detected on the page but was not associated with this "
+                "candidate; the period association remains unresolved.",
             ))
         bbox = _union_boxes(all_boxes)
         for row_index in unresolved_rows:
@@ -1125,6 +1238,176 @@ def _aligned_numeric_candidates(
             DiagnosticSeverity.INFO,
         )]
     return candidates, []
+
+
+def _row_extent(boxes: list[BoundingBox]) -> tuple[float, float]:
+    """Return the vertical extent (top, bottom) of a row's source boxes."""
+    return min(box[1] for box in boxes), max(box[3] for box in boxes)
+
+
+def _is_period_header_row(row: dict[int, tuple[str, BoundingBox]]) -> bool:
+    """True when a row's value cells are reporting periods rather than values.
+
+    Such a row labels the rows below it, so it must not be merged into the
+    block above it.
+    """
+    value_cells = [(text, box) for column, (text, box) in row.items() if column > 0]
+    if len(value_cells) < 2:
+        return False
+    if not all(_is_period_token(text) for text, _ in value_cells):
+        return False
+    label = row.get(0)
+    return label is not None and not _looks_numeric(label[0])
+
+
+def _align_period_header_row(cells: list[TableCell]) -> tuple[list[TableCell], Optional[str]]:
+    """Attach a header row's period tokens to the columns they govern.
+
+    A period header is often centred over its column while the values below
+    it are right-aligned, so the header can fall either side of the boundary
+    that separates the label column from the first value column. When the
+    header row carries exactly as many period tokens as the run has value
+    columns, the tokens are attached to those columns in reading order, which
+    is the only reliable link between a centred header and its values.
+
+    The original header text is preserved; only the column it is attached to
+    can change, and the change is reported.
+    """
+    if not cells:
+        return cells, None
+    by_row: dict[int, list[TableCell]] = {}
+    for cell in cells:
+        by_row.setdefault(cell.row_index, []).append(cell)
+    value_columns = sorted({
+        cell.column_index
+        for row_cells in by_row.values()
+        for cell in row_cells
+        if cell.column_index > 0 and not _is_period_token(cell.text)
+    })
+    if len(value_columns) < 2:
+        return cells, None
+    adjusted: list[TableCell] = []
+    note = None
+    for row_index, row_cells in by_row.items():
+        header_cells = sorted(
+            (cell for cell in row_cells if cell.column_index > 0 and _is_period_token(cell.text)),
+            key=lambda cell: ((cell.bbox[0] + cell.bbox[2]) / 2) if cell.bbox else cell.column_index,
+        )
+        other_cells = [cell for cell in row_cells if cell not in header_cells]
+        if len(header_cells) >= 2 and len(header_cells) == len(value_columns):
+            for token_cell, target_column in zip(header_cells, value_columns):
+                if token_cell.column_index != target_column:
+                    note = (
+                        f"Row {row_index} period header tokens were attached to the value columns "
+                        "in reading order because a centred header does not share the value column's edge."
+                    )
+                adjusted.append(token_cell.model_copy(update={"column_index": target_column}))
+        else:
+            adjusted.extend(header_cells)
+        adjusted.extend(other_cells)
+    adjusted.sort(key=lambda cell: (cell.row_index, cell.column_index))
+    return adjusted, note
+
+
+def _record_boxes(record) -> list[BoundingBox]:
+    """Collect every source box belonging to one row record."""
+    _line_index, assignments, non_numeric = record
+    boxes = [box for values in assignments.values() for box, _ in values]
+    boxes.extend(box for box, _ in non_numeric)
+    return boxes
+
+
+def _header_match_tolerance(column_positions: list[float], height: float) -> float:
+    """Tolerance for matching a header token to a numeric column.
+
+    A period header is usually centred over its column while the values below
+    it are right-aligned, so the header's centre can sit half a column width
+    away from the value column's right edge. Comparing a header centre with a
+    value right edge therefore needs a tolerance that scales with the column
+    spacing rather than with the text height alone.
+    """
+    tolerance = max(12.0, height * 2.5)
+    if len(column_positions) >= 2:
+        spacing = median([
+            column_positions[index + 1] - column_positions[index]
+            for index in range(len(column_positions) - 1)
+        ])
+        tolerance = max(tolerance, 0.6 * spacing)
+    return tolerance
+
+
+def _match_period_tokens(
+    tokens: list[tuple[BoundingBox, str]],
+    column_positions: list[float],
+    tolerance: float,
+) -> tuple[list[tuple[int, int]], bool]:
+    """Assign period header tokens to numeric columns in reading order.
+
+    The assignment is order preserving: a header token may only govern a
+    column at or after the column governed by the previous token. This keeps
+    a header with the column it labels even when the header is centred over
+    the column and the values below it are right-aligned, where a nearest-edge
+    comparison would pick the wrong neighbour or tie.
+
+    Returns the matched ``(column_index, token_index)`` pairs and a flag that
+    is true when more than one optimal assignment exists.
+    """
+    if not tokens or not column_positions:
+        return [], False
+    centres = [(box[0] + box[2]) / 2 for box, _ in tokens]
+    token_count = len(tokens)
+    column_count = len(column_positions)
+
+    def _prefer(first, second):
+        if first[0] != second[0]:
+            return first if first[0] > second[0] else second
+        if abs(first[1] - second[1]) > 1e-9:
+            return first if first[1] < second[1] else second
+        return (first[0], first[1], first[2] + second[2])
+
+    @lru_cache(maxsize=None)
+    def solve(token_index: int, first_column: int):
+        """Best (count, cost, ways) for the remaining tokens and columns."""
+        if token_index == token_count or first_column >= column_count:
+            return (0, 0.0, 1)
+        best = solve(token_index + 1, first_column)
+        for column_index in range(first_column, column_count):
+            distance = abs(centres[token_index] - column_positions[column_index])
+            if distance > tolerance:
+                continue
+            count, cost, ways = solve(token_index + 1, column_index + 1)
+            best = _prefer(best, (count + 1, cost + distance, ways))
+        return best
+
+    count, _cost, ways = solve(0, 0)
+    mapping: list[tuple[int, int]] = []
+    token_index = 0
+    first_column = 0
+    while token_index < token_count and first_column < column_count:
+        options = []
+        skipped = solve(token_index + 1, first_column)
+        options.append((skipped, None))
+        for column_index in range(first_column, column_count):
+            distance = abs(centres[token_index] - column_positions[column_index])
+            if distance > tolerance:
+                continue
+            sub_count, sub_cost, sub_ways = solve(token_index + 1, column_index + 1)
+            options.append(((sub_count + 1, sub_cost + distance, sub_ways), column_index))
+        target_count, target_cost, _ = solve(token_index, first_column)
+        chosen = None
+        for value, column_index in options:
+            if value[0] == target_count and abs(value[1] - target_cost) <= 1e-9:
+                if chosen is None or (column_index is not None and chosen[1] is None):
+                    chosen = (value, column_index)
+        if chosen is None:
+            break
+        if chosen[1] is None:
+            token_index += 1
+            continue
+        mapping.append((chosen[1], token_index))
+        token_index += 1
+        first_column = chosen[1] + 1
+    return mapping, ways > 1
 
 
 def _group_words_into_lines(words: list[tuple[BoundingBox, str]], tolerance: float) -> list[list[tuple[BoundingBox, str]]]:
@@ -1161,13 +1444,31 @@ def _join_segment(words: list[tuple[BoundingBox, str]]) -> tuple[BoundingBox, st
     return _union_boxes([item[0] for item in words]), " ".join(item[1] for item in words)
 
 
+_FOOTNOTE_MARKERS = re.compile(r"[¹²³⁴⁵⁶⁷⁸⁹⁰*†‡]+$")
+
+
+def _strip_footnote_markers(text: str) -> str:
+    """Remove a trailing footnote marker from a source token.
+
+    A marker is metadata attached to a cell, not part of the reported period
+    or value. It must not change how the token is classified, so it is
+    removed before any period or numeric decision is taken. The caller's
+    original text is never modified; only this normalized copy is used.
+    """
+    return _FOOTNOTE_MARKERS.sub("", text.strip()).strip()
+
+
 def _looks_numeric(text: str) -> bool:
-    """Recognize value-like numeric tokens while excluding periods and prose."""
-    value = text.strip()
+    """Recognize value-like numeric tokens while excluding periods and prose.
+
+    Footnote markers are stripped first so that a marked period such as
+    ``2024*`` is still recognised as a period instead of falling through to
+    the numeric pattern as the bare number 2024.
+    """
+    value = _strip_footnote_markers(text)
     if not value or _is_placeholder(value) or _is_period_token(value):
         return False
     value = value.replace("−", "-").replace("–", "-")
-    value = re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰*†‡]+$", "", value).strip()
     return bool(re.fullmatch(
         r"\(?\s*[+-]?\s*(?:(?:GBP|USD|EUR|INR|JPY|CNY)\s*)?"
         r"[£$€₹¥]?\s*\d[\d,]*(?:\.\d+)?\s*"
@@ -1178,7 +1479,9 @@ def _looks_numeric(text: str) -> bool:
 
 
 def _is_period_token(text: str) -> bool:
+    """Recognize a reporting-period token, tolerating a footnote marker."""
     value = text.strip().strip("()[]{}.,;:")
+    value = _strip_footnote_markers(value)
     return bool(
         re.fullmatch(r"(?i)(?:FY\s*)?(?:19|20)\d{2}(?:\s*[-/–—]\s*\d{2,4})?", value)
         or re.fullmatch(r"(?i)FY\s*\d{2,4}", value)

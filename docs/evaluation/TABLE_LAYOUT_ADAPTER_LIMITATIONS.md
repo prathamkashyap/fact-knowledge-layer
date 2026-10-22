@@ -16,6 +16,11 @@ these bounds skips `find_tables()` and records the available measurements and
 reason in `find_tables_skipped_workload`. Word-geometry and repeated label/value
 group detection still run after a skip.
 
+Text volume is measured first, and vector drawing enumeration is deferred until
+the text volume is known to be inside the bounds: enumerating drawings is the
+most expensive of these measurements on vector-heavy pages, and a page already
+excluded by its volume cannot reach the costly detector.
+
 The 30-drawing ceiling preserves the pre-existing parser guard. The word and
 text ceilings are conservative page-volume limits, not a benchmark-derived
 runtime model. The largest of the three authorized development pages had 607
@@ -25,6 +30,18 @@ outlier page volume. These pages had 43–1,085 drawings, so they use the
 fallback path based on drawing complexity. No universal worst-case runtime
 guarantee is claimed. A future change to these limits requires measured
 workload evidence and tests for the diagnostic and fallback behavior.
+
+### Page-scoring compatibility
+
+The scoring formula is unchanged. The legacy `has_tables` signal follows the
+same rule as before whenever the workload guard allows the detector to run.
+The precise deviation is on pages the guard excludes: the legacy rule could
+call `find_tables()` on a page with 1–30 drawings and more than 3,000 words or
+20,000 text characters, and the guard cannot. On those pages `has_tables` falls
+back to the tabular-line heuristic, the page score loses its 2.0 table
+component, and a page whose total score was within 2.0 of the candidate
+threshold can lose candidate status. The deviation is bounded to pages outside
+the documented workload bounds and is covered by an explicit test.
 
 ## Geometry and interpretation limits
 
@@ -41,9 +58,42 @@ abstains on one-off definition lists. Merged or incomplete headers may remain
 ambiguous. Unmatched and ambiguous structure must not be promoted to a `Fact`
 without a later, separately tested semantic mapping phase.
 
-For right-aligned grids, a nearby period row is associated by x alignment. A
-single page-wide period row may also govern separated row blocks only when all
-of that block's recurring value columns have a corresponding aligned period
-cell; the adapter retains separate row-block candidates and records that this
-association used the page-wide grid. Competing or partial headers remain
-unresolved.
+Rows are grouped into one candidate only when the columns continue and the rows
+are physically close. A row block that is separated from the block above it by
+whitespace, or by a table of its own, is emitted as its own candidate; a
+candidate's bounding box never spans two table regions. A row whose value cells
+are all reporting periods is a header row: it governs the rows below it and it
+ends the block above it.
+
+A reporting period is recognised with or without a trailing footnote marker, so
+`2024*` is a period and not the number 2024. The marked text is preserved in the
+emitted cell.
+
+For right-aligned grids, a period header is matched to the value columns in
+reading order rather than by comparing a header's centre with a value's right
+edge; a centred header over a right-aligned value column is therefore attached
+to the column it labels. When several period tokens compete for one column, or
+when a detected period header cannot govern the block, the association is
+reported (`period_header_conflict`, `period_header_not_associated`,
+`ambiguous_period_header`) and no header is attached. A single page-wide period
+row may also govern separated row blocks only when all of that block's
+recurring value columns receive an unambiguous period cell; the adapter retains
+separate row-block candidates and records that this association used the
+page-wide grid. Competing or partial headers remain unresolved.
+
+## Known remaining limits
+
+* The KPI label/value-group detector only recognises upper-case labels that
+  are left-aligned with their value on the following line. Title-case,
+  sentence-case, right-aligned and same-line label/value cards are not
+  detected.
+* A wrapped row label is reported as unresolved; the preceding line's words are
+  not merged back onto the row.
+* Multi-level headers are not represented as a header path. A header line that
+  carries more period tokens than the candidate has value columns is attached
+  only when the assignment is unambiguous; otherwise the period association
+  stays unresolved.
+* Tables whose ruling produces a non-rectangular grid are dropped by the
+  bordered path rather than partially represented.
+* Candidate identifiers are positional (`p<page>-t<index>`), so they are stable
+  for a fixed page ordering but are not stable across detector changes.

@@ -1004,13 +1004,12 @@ def _aligned_numeric_candidates(
 
     # Period header lines are collected as source tokens. Which column a token
     # governs is decided later, per candidate, because only a candidate knows
-    # which numeric columns it actually covers.
+    # which numeric columns it actually covers. A label printed as several
+    # words ("Q4" and "2024") is grouped back into one token first.
+    period_header_gap = max(7.0, median(heights) * 1.25)
     period_header_lines = []
     for line_index, line in enumerate(lines):
-        tokens = sorted(
-            ((box, text) for box, text in line if _is_period_token(text)),
-            key=lambda item: (item[0][0] + item[0][2]) / 2,
-        )
+        tokens = _period_header_tokens(line, period_header_gap)
         if len(tokens) >= 2:
             period_header_lines.append((line_index, tokens))
 
@@ -1382,11 +1381,72 @@ def _is_period_header_row(row: dict[int, tuple[str, BoundingBox]]) -> bool:
 
 
 def _period_tokens_in(text: str) -> list[str]:
-    """The reporting-period tokens inside a cell's text.
+    """The reporting-period labels inside a cell's text.
 
     A cell that carries more than one of them cannot label a single column.
+    A label may span several words ("Q4 2024", "Q1 FY 2024"), so the text is
+    parsed left to right and the longest run of words that is itself a label
+    wins. Splitting on whitespace would read "Q4 2024" as the two labels
+    "Q4" and "2024" and wrongly report the cell as ambiguous.
     """
-    return [token for token in text.split() if _is_period_token(token)]
+    stripped = text.strip()
+    if _is_period_token(stripped):
+        return [stripped]
+    words = stripped.split()
+    labels: list[str] = []
+    index = 0
+    while index < len(words):
+        matched = False
+        for width in (3, 2, 1):
+            if index + width > len(words):
+                continue
+            candidate = " ".join(words[index:index + width])
+            if _is_period_token(candidate):
+                labels.append(candidate)
+                index += width
+                matched = True
+                break
+        if not matched:
+            index += 1
+    return labels
+
+
+def _period_header_tokens(
+    line: list[tuple[BoundingBox, str]],
+    gap_threshold: float,
+) -> list[tuple[BoundingBox, str]]:
+    """The reporting-period labels on one text line, with their source boxes.
+
+    A header label is often printed as separate words ("Q4" and "2024").
+    Adjacent words are grouped only when they are a period label together and
+    the gaps between them stay within the line's own cell gap threshold, so
+    two neighbouring columns are never merged into one label.
+    """
+    tokens: list[tuple[BoundingBox, str]] = []
+    index = 0
+    while index < len(line):
+        matched = False
+        for width in (3, 2, 1):
+            if index + width > len(line):
+                continue
+            adjacent = all(
+                line[offset + 1][0][0] - line[offset][0][2] <= gap_threshold
+                for offset in range(index, index + width - 1)
+            )
+            if not adjacent:
+                continue
+            text = " ".join(line[offset][1] for offset in range(index, index + width))
+            if _is_period_token(text):
+                tokens.append((
+                    _union_boxes([line[offset][0] for offset in range(index, index + width)]),
+                    text,
+                ))
+                index += width
+                matched = True
+                break
+        if not matched:
+            index += 1
+    return tokens
 
 
 def _align_period_header_row(

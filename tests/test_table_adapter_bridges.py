@@ -180,22 +180,119 @@ def test_subheading_two_blank_lines_keeps_one_candidate():
             name, texts)
 
 
-def test_separation_beyond_the_bridge_ceiling_never_invents_rows():
-    """Beyond the bridge ceiling the block splits or is abstained from.
+def test_bridge_ceiling_is_pinned_on_both_sides():
+    """The bridge ceiling pins the subheading bridge on both sides.
 
-    Rows are never fabricated to fill a candidate, and the surviving part must
-    not claim the rows of the part that was separated.
+    ``_bridge_ceiling`` is the larger of 3.5 x the local row pitch and 5 x the
+    text height. With a 12 pt pitch and 9 pt text that is 45.0 pt, measured
+    from the bottom of the row above the bridge to the top of the row below it.
+    At the ceiling (gap 45.0) the bridge still holds both blocks together; just
+    beyond it (gap 45.5) the aligned path abstains and the borderless path
+    keeps only the upper block. Rows are never fabricated to span the split.
     """
-    rows = _subheading_table(pitch=12.0, blank_lines=4)
+    import app.table_extraction as te
+
+    assert te._bridge_ceiling(12.0, 9.0) == 45.0
+
+    def build(vertical_gap: float):
+        rows = [_header_row(("2023", "2024"))]
+        rows += _data_rows(40.0, 12.0, VALUES[:2])
+        subheading_y = 73.0 + vertical_gap / 2.0
+        margin_y = 73.0 + vertical_gap
+        rows.append((subheading_y, [_at(30.0, "SEGMENT BETA")]))
+        rows.append((margin_y, [_at(30.0, "Margin"), _right(250.0, "-2.1"), _right(350.0, "2.6")]))
+        rows.append((margin_y + 12.0, [_at(30.0, "Tax"), _right(250.0, "10"), _right(350.0, "12")]))
+        return rows
+
+        for vertical_gap, expect_fused in ((45.0, True), (45.5, False)):
+            rows = build(vertical_gap)
+            words, heights = _words_from(rows)
+            aligned_cands, aligned_diags = _aligned_numeric_candidates(1, words, heights, [])
+            border_cands, _ = _borderless_candidates(None, 1, _raw_words(rows), [])
+            if expect_fused:
+                assert len(aligned_cands) == 1 and len(border_cands) == 1, (
+                    vertical_gap, aligned_cands, border_cands)
+                for cands in (aligned_cands, border_cands):
+                    c = cands[0]
+                    texts = {cell.text for cell in c.cells}
+                    assert {"1200", "1450", "25", "38", "-2.1", "2.6", "50", "55", "10", "12"} <= texts, (
+                        vertical_gap, texts)
+                    assert "SEGMENT BETA" in texts, (vertical_gap, texts)
+            else:
+                assert aligned_cands == [], (vertical_gap, aligned_cands)
+                assert any(d.code in ("aligned_numeric_block_dropped",
+                                      "aligned_numeric_candidate_abstained")
+                           for d in aligned_diags), aligned_diags
+                assert len(border_cands) == 1, (vertical_gap, border_cands)
+                c = border_cands[0]
+                texts = {cell.text for cell in c.cells}
+                assert {"1200", "1450", "25", "38", "Measure", "Profit", "Revenue"} <= texts, (
+                    vertical_gap, texts)
+                assert not ({"50", "55", "10", "12"} & texts), (vertical_gap, texts)
+                assert "SEGMENT BETA" not in texts, (vertical_gap, texts)
+                # No candidate claims rows from both sides of the split.
+                assert c.bbox[3] <= 73.0 + vertical_gap / 2.0, (vertical_gap, c.bbox)
+
+
+def test_two_headerless_blocks_separated_by_a_heading_inside_the_fusion_window_fuse():
+    """F-3 - the widened fusion window (inherent to the F1 fix).
+
+    Two headerless row blocks separated by a single heading-like text line are
+    fused into one candidate when the row-top pitch across the heading lies in
+    the roughly 38-54 pt band (about 3.2-4.5 x the local 12 pt pitch). This is
+    required for F1: the two-blank-line fixture's 48 pt pitch falls inside it,
+    so removing the window re-breaks quarterly header handling. The ambiguity
+    between an internal subheading and a heading that starts a new table is not
+    resolvable from geometry alone, so this is a deliberate trade-off rather
+    than a defect; it is documented in the limitations file.
+    """
+    def build(pitch_across_heading: float):
+        return [
+            (40.0, [_at(30.0, "Revenue"), _right(250.0, "1200"), _right(350.0, "1450")]),
+            (52.0, [_at(30.0, "Profit"), _right(250.0, "25"), _right(350.0, "38")]),
+            (64.0, [_at(30.0, "Margin"), _right(250.0, "-2.1"), _right(350.0, "2.6")]),
+            (64.0 + pitch_across_heading / 2.0, [_at(30.0, "SEGMENT BETA")]),
+            (64.0 + pitch_across_heading, [_at(30.0, "Revenue"), _right(250.0, "1300"),
+                                           _right(350.0, "1500")]),
+            (64.0 + pitch_across_heading + 12.0, [_at(30.0, "Profit"), _right(250.0, "26"),
+                                                  _right(350.0, "39")]),
+            (64.0 + pitch_across_heading + 24.0, [_at(30.0, "Margin"), _right(250.0, "-2.0"),
+                                                  _right(350.0, "2.7")]),
+        ]
+
+    for name, run in (("aligned", _aligned), ("borderless", _borderless)):
+        candidates = run(build(48.0))
+        assert len(candidates) == 1, (name, candidates)
+        texts = set(candidates[0][1])
+        assert {"1200", "1300", "1450", "1500", "25", "26", "38", "39"} <= texts, (
+            name, texts)
+
+
+def test_two_headerless_blocks_separated_by_a_heading_outside_the_fusion_window_split():
+    """F-3 boundary control: beyond the ceiling the bridge does not apply.
+
+    With a 60 pt pitch across the heading (vertical gap 51 pt, past the 45 pt
+    ceiling) the two headerless blocks stay as separate candidates; neither
+    candidate claims the other's rows.
+    """
+    rows = [
+        (40.0, [_at(30.0, "Revenue"), _right(250.0, "1200"), _right(350.0, "1450")]),
+        (52.0, [_at(30.0, "Profit"), _right(250.0, "25"), _right(350.0, "38")]),
+        (64.0, [_at(30.0, "Margin"), _right(250.0, "-2.1"), _right(350.0, "2.6")]),
+        (94.0, [_at(30.0, "SEGMENT BETA")]),
+        (124.0, [_at(30.0, "Revenue"), _right(250.0, "1300"), _right(350.0, "1500")]),
+        (136.0, [_at(30.0, "Profit"), _right(250.0, "26"), _right(350.0, "39")]),
+        (148.0, [_at(30.0, "Margin"), _right(250.0, "-2.0"), _right(350.0, "2.7")]),
+    ]
     for name, run in (("aligned", _aligned), ("borderless", _borderless)):
         candidates = run(rows)
-        for candidate in candidates:
-            texts = set(candidate[1])
-            # A candidate must not contain rows from both sides of the split.
-            assert not ({"1200", "1450"} & texts) or not ({"50", "55"} & texts), (
-                name, candidate)
-        if candidates:
-            assert all("SEGMENT BETA" not in set(c[1]) or len(c[1]) > 1 for c in candidates)
+        assert len(candidates) == 2, (name, candidates)
+        upper, lower = sorted(candidates, key=lambda item: item[0][0])
+        assert upper[0][1] < lower[0][0], (name, candidates)
+        assert {"1200", "1450", "25", "38"} <= set(upper[1]), (name, upper)
+        assert {"1300", "1500", "26", "39"} <= set(lower[1]), (name, lower)
+        assert not ({"1300", "1500"} & set(upper[1])), (name, upper)
+        assert not ({"1200", "1450"} & set(lower[1])), (name, lower)
 
 
 def test_restored_bridge_does_not_reunite_two_separate_tables():

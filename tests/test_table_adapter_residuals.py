@@ -24,8 +24,10 @@ import pymupdf
 from app.table_extraction import (
     TableDetectionMethod,
     _aligned_numeric_candidates,
+    _borderless_candidates,
     _is_period_token,
     _looks_numeric,
+    _period_tokens_in,
     extract_tables_from_page,
 )
 
@@ -402,3 +404,117 @@ def test_quarterly_period_header_is_mapped_to_its_column():
     cells = _cells(candidates[0])
     assert cells[(0, 1)].text == "Q4 2024"
     assert cells[(0, 2)].text == "Q4 2025"
+
+
+# ---------------------------------------------------------------------------
+# B1-a continued - quarterly labels printed as several words stay one label
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Q4 2024", ["Q4 2024"]),
+        ("Q1 2024", ["Q1 2024"]),
+        ("Q4 FY2024", ["Q4 FY2024"]),
+        ("Q4 FY 2024", ["Q4 FY 2024"]),
+        ("Q1 FY24", ["Q1 FY24"]),
+        ("Q4*", ["Q4*"]),
+        ("Q4 2024*", ["Q4 2024*"]),
+        ("Q3 2023", ["Q3 2023"]),
+        ("2023 2024", ["2023", "2024"]),
+        ("Q4 2024 2025", ["Q4 2024", "2025"]),
+        ("Q4* 2024", ["Q4*", "2024"]),
+        ("", []),
+        ("Revenue", []),
+    ],
+)
+def test_period_labels_are_parsed_as_whole_labels(text, expected):
+    """A cell's period labels are parsed left to right as whole labels.
+
+    Splitting on whitespace would read ``Q4 2024`` as the two labels
+    ``Q4`` and ``2024`` and wrongly report the cell as ambiguous.
+    """
+    assert _period_tokens_in(text) == expected, text
+
+
+def test_quarterly_period_header_printed_as_two_words_is_mapped_in_the_aligned_path():
+    """Real PDFs print ``Q4`` and ``2024`` as separate words; they form one label."""
+    rows = [
+        (40, [_label_word(30.0, "Measure"), _centered_word(194.0, "Q4"),
+              _centered_word(206.0, "2024"), _centered_word(294.0, "Q4"),
+              _centered_word(306.0, "2025")]),
+        (52, [_label_word(30.0, "Revenue"), _right_word(250.0, "1200"),
+              _right_word(350.0, "1450")]),
+        (64, [_label_word(30.0, "Profit"), _right_word(250.0, "25"),
+              _right_word(350.0, "38")]),
+        (76, [_label_word(30.0, "Margin"), _right_word(250.0, "-2.1"),
+              _right_word(350.0, "2.6")]),
+    ]
+    words, heights = _rows_to_words(rows)
+    candidates, diagnostics = _aligned_numeric_candidates(1, words, heights, [])
+    assert len(candidates) == 1, ([d.code for d in diagnostics], candidates)
+    cells = _cells(candidates[0])
+    assert cells[(0, 1)].text == "Q4 2024", cells
+    assert cells[(0, 2)].text == "Q4 2025", cells
+    assert not any(d.code == "period_header_conflict" for d in candidates[0].diagnostics), (
+        [d.code for d in candidates[0].diagnostics])
+
+
+def _raw_row_words(rows):
+    """Convert ``(y, [(x0, text, width), ...])`` rows to raw word tuples."""
+    words = []
+    for y, items in rows:
+        for item in items:
+            if len(item) == 3:
+                x0, text, width = item
+            else:
+                x0, text = item
+                width = 6.0 * len(text)
+            words.append((x0, y, x0 + width, y + 9, text, 0, 0, 0))
+    return words
+
+
+def test_quarterly_period_header_printed_as_two_words_is_mapped_in_the_borderless_path():
+    """The borderless path must not raise a false conflict for split words."""
+    rows = [
+        (40, [_label_word(30.0, "Measure"), _centered_word(194.0, "Q4"),
+              _centered_word(206.0, "2024"), _centered_word(294.0, "Q4"),
+              _centered_word(306.0, "2025")]),
+        (52, [_label_word(30.0, "Revenue"), _right_word(250.0, "1200"),
+              _right_word(350.0, "1450")]),
+        (64, [_label_word(30.0, "Profit"), _right_word(250.0, "25"),
+              _right_word(350.0, "38")]),
+        (76, [_label_word(30.0, "Margin"), _right_word(250.0, "-2.1"),
+              _right_word(350.0, "2.6")]),
+    ]
+    candidates, diagnostics = _borderless_candidates(None, 1, _raw_row_words(rows), [])
+    assert len(candidates) == 1, ([d.code for d in diagnostics], candidates)
+    cells = _cells(candidates[0])
+    assert cells[(0, 1)].text == "Q4 2024", cells
+    assert cells[(0, 2)].text == "Q4 2025", cells
+    assert not any(d.code == "period_header_conflict" for d in candidates[0].diagnostics), (
+        [d.code for d in candidates[0].diagnostics])
+
+
+def test_a_cell_carrying_two_period_labels_stays_ambiguous_in_the_borderless_path():
+    """One cell holding two period labels cannot label a single column.
+
+    ``2023 2024`` is two labels in one cell, so the header stays unresolved
+    and the conflict is reported instead of being silently assigned.
+    """
+    rows = [
+        (40, [_label_word(30.0, "Measure"), _at(180.0, "2023"), _at(192.0, "2024"),
+              _at(280.0, "2025")]),
+        (52, [_label_word(30.0, "Revenue"), _right_word(250.0, "1200"),
+              _right_word(350.0, "1450")]),
+        (64, [_label_word(30.0, "Profit"), _right_word(250.0, "25"),
+              _right_word(350.0, "38")]),
+    ]
+    candidates, diagnostics = _borderless_candidates(None, 1, _raw_row_words(rows), [])
+    assert len(candidates) == 1, ([d.code for d in diagnostics], candidates)
+    cells = _cells(candidates[0])
+    assert cells[(0, 1)].text == "2023 2024", cells
+    assert cells[(0, 2)].text == "2025", cells
+    assert any(d.code == "period_header_conflict" for d in candidates[0].diagnostics), (
+        [d.code for d in candidates[0].diagnostics])

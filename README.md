@@ -32,7 +32,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Verify regression test suite (300 passing)
+# 3. Verify regression test suite (historical Week 5 baseline: 300 passing; current verified: 444 passing)
 python -m pytest tests/ -q
 
 # 4. Load the bundled starter demo database
@@ -242,7 +242,7 @@ python -m pytest tests/ -q
 ```
 
 ```
-===================== 300 passed, 7 warnings in ~130s =====================
+===================== 300 passed, 7 warnings in ~130s (historical Week 5 baseline at d9c68bd) =====================
 ```
 
 | Test File | Count | Coverage Focus |
@@ -363,7 +363,7 @@ An audit of the **6 remaining `recall_miss` claims** (ex-012/013/014/015/016/021
 | Relationship gold | 30 (24 label + 6 absent) | **30** (unchanged) |
 | Facts (clean run) | 21 | **23** |
 | Relationships (clean run) | 24 (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS, 0 CORROBORATES) | **24** (unchanged) |
-| Tests | 282 | **300** |
+| Tests | 282 | **300** (historical Week 5 baseline); current verified 444 at 5f6d2ef audit
 | Remaining recall misses | 6 | **4** (ex-012, ex-013, ex-016, ex-021) |
 
 ### Before / After (Week 2)

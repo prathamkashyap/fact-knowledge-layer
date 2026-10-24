@@ -42,16 +42,16 @@ This document reconciles the repository's current state against its authoritativ
 
 - Focused quarterly: 1 passed
 - `tests/test_table_adapter_bridges.py` + `tests/test_table_adapter_residuals.py`: 76 passed
-- Full suite (`tests/`): 444 passed, 7 warnings, ~145–154 s (varies by run)
+- Full suite (`tests/`): 444 passed, 7 warnings, ~145–154 s (varies by run; 46 tests collected in `test_table_adapter_residuals.py`)
 - `compileall`: exit 0
 
 ## Directory organization (high level, safe to describe)
 
-- `app/`: source modules (`table_extraction.py`, `models.py`, `database.py`, `pdf_parser.py`, `extractor.py`, `normalizer.py`, `matcher.py`, `reasoner.py`, `main.py`, `pipeline.py`, `providers.py`, `__init__.py`)
+- `app/`: source modules (`table_extraction.py`, `models.py`, `database.py`, `pdf_parser.py`, `extraction.py`, `normalizer.py`, `matcher.py`, `reasoner.py`, `main.py`, `pipeline.py`, `providers.py`, `__init__.py`)
 - `tests/`: 21 test files covering table extraction, bridge/ceiling, quarter/period header, defects, residuals, evaluation gates, comparative highlights, evidence validation, director appointments, dedup, demo loader, gate checks
-- `docs/`: `evaluation/` (protected gold files, protocols, reports), `validation/` (baseline metrics/relationships), `TABLE_EXTRACTION_IMPLEMENTATION_PLAN.md`, `TABLE_LAYOUT_ADAPTER_LIMITATIONS.md`, `REPOSITORY_STATUS.md` (this doc), `FILE_INVENTORY.md`
+- `docs/`: `evaluation/` (protected gold, protocols, reports), `validation/` (baseline metrics/relationships), `REPOSITORY_STATUS.md` (this doc), `FILE_INVENTORY.md`
 - `scripts/`: `evaluate.py`, `load_starter_demo.py`
-- `starter-datasets/`: `delhivery/`, `india-macro-economy/`; `README.md`; `starter-datasets.zip` (generated / package artifact — excluded from source-change scope)
+- `starter-datasets/`: `delhivery/`, `india-macroeconomy/`; `README.md`; `starter-datasets.zip` (generated / package artifact — excluded from source-change scope)
 - `docs/evaluation/`: protected artifacts (`heldout_gold.json`, `results.json`, `extraction_gold.json`, `relationship_gold.json`, `heldout_baseline_predictions.json`, `HELDOUT_BASELINE_PROTOCOL.md`, `heldout_baseline_report.md`, `heldout_baseline_runner.py`, `HELDOUT_FAILURE_AUDIT.md`, `TABLE_EXTRACTION_IMPLEMENTATION_PLAN.md`, `TABLE_LAYOUT_ADAPTER_LIMITATIONS.md`) — these must not be modified by Phase 1/2/any audit work
 - `docs/validation/`: `baseline_facts.json`, `baseline_metrics.json`, `baseline_relationships.json`, `BASELINE.md`, `phase0-spike.py`
 - `.env.example`, `requirements.txt`, `README.md`

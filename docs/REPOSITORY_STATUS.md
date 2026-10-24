@@ -42,7 +42,7 @@ This document reconciles the repository's current state against its authoritativ
 
 - Focused quarterly: 1 passed
 - `tests/test_table_adapter_bridges.py` + `tests/test_table_adapter_residuals.py`: 76 passed
-- Full suite (`tests/`): 444 passed, 7 warnings, ~145–154 s (varies by run; 46 tests collected in `test_table_adapter_residuals.py`)
+- Full suite (`tests/`): 444 passed, 7 warnings, 133.65 s (verified at audit-remediation worktree 2026-10-24, exit 0)
 - `compileall`: exit 0
 
 ## Directory organization (high level, safe to describe)

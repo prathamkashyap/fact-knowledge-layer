@@ -609,7 +609,15 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
         assert "period_header_conflict" not in diag_codes, diag_codes
         # ambiguous_header_span is structural (merged-header span; source line 912);
         # it may appear in borderless but must not indicate unresolved quarter assignment.
-        assert "period_header_conflict" not in diag_codes, diag_codes
+        # Column mapping verified directly where adapter exposes column_index.
+        border_texts = {cell.text: cell for cell in border_cands[0].cells}
+        if "Q4 2024" in border_texts and hasattr(border_texts["Q4 2024"], "column_index"):
+            assert border_texts["Q4 2024"].column_index == 1, ("borderless Q4 2024 column mapping", border_texts)
+            assert border_texts["Q4 2025"].column_index == 2, ("borderless Q4 2025 column mapping", border_texts)
+        numeric_col1_border = [cell.text for cell in border_cands[0].cells if getattr(cell, "column_index", None) == 1 and cell.text not in ("Q4 2024", "Revenue", "Profit", "Margin")]
+        numeric_col2_border = [cell.text for cell in border_cands[0].cells if getattr(cell, "column_index", None) == 2 and cell.text not in ("Q4 2025", "Revenue", "Profit", "Margin")]
+        assert {"1200", "25", "-2.1"} <= set(numeric_col1_border), numeric_col1_border
+        assert {"1450", "38", "2.6"} <= set(numeric_col2_border), numeric_col2_border
 
         # Aligned path: must produce one candidate with full quarter labels
         aligned_words = [((w[0], w[1], w[2], w[3]), w[4]) for w in words]
@@ -642,5 +650,10 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
         pub_texts = {cell.text for cell in public.candidates[0].cells}
         assert "Q4 2024" in pub_texts, pub_texts
         assert "Q4 2025" in pub_texts, pub_texts
+        # Public adapter column mapping verified directly where exposed
+        pub_header_map = {cell.text: cell for cell in public.candidates[0].cells if cell.text in ("Q4 2024", "Q4 2025") and hasattr(cell, "column_index")}
+        if "Q4 2024" in pub_header_map:
+            assert pub_header_map["Q4 2024"].column_index == 1, ("public Q4 2024 column mapping", pub_header_map)
+            assert pub_header_map["Q4 2025"].column_index == 2, ("public Q4 2025 column mapping", pub_header_map)
     finally:
         pdf.close()

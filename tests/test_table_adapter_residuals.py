@@ -549,3 +549,37 @@ def test_quarterly_split_word_headers_associated_without_conflict():
         assert any("2024" in t or "2025" in t for t in texts), (label, texts)
     # Multi-label ambiguity remains detected (control)
     assert _period_tokens_in("2023 2024") == ["2023", "2024"]
+
+
+def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter():
+    """Realistic split-word page (PDF text with space) must retain full Q4 2024 / Q4 2025.
+
+    The committed synthetic-string fixture passes strings as whole units; this
+    verifies the public adapter with actual PyMuPDF word separation (2.5 pt
+    gap between Q4 and 2024). It fails if either quarter is dropped while
+    its year remains, regardless of conflict absence.
+    """
+    import pymupdf
+    from app.table_extraction import _borderless_candidates, extract_tables_from_page
+    pdf = pymupdf.open("/tmp/fkl-followup-scratch/quarterly_split.pdf")
+    page = pdf.load_page(0)
+    # Borderless path on real PDF words
+    raw = [(w[0], w[1], w[2], w[3], w[4], 0, 0, 0) for w in page.get_text("words")]
+    border_cands, _ = _borderless_candidates(None, 1, raw, [])
+    assert len(border_cands) >= 1, ("borderless found no candidate on split-word PDF")
+    texts = {cell.text for cell in border_cands[0].cells}
+    assert "Q4 2024" in texts, texts
+    assert "Q4 2025" in texts, texts
+    # Coherent grouping means year appears only inside combined label, not separate
+    assert any("2024" in t for t in texts), texts
+    diag_codes = [d.code for d in border_cands[0].diagnostics]
+    assert "period_header_conflict" not in diag_codes, diag_codes
+    # Public adapter path
+    public = extract_tables_from_page(page, 1)
+    assert len(public.candidates) >= 1, ("public adapter found no candidate")
+    pub_texts = {cell.text for cell in public.candidates[0].cells}
+    assert "Q4 2024" in pub_texts, pub_texts
+    assert "Q4 2025" in pub_texts, pub_texts
+    pub_diag = [d.code for d in public.candidates[0].diagnostics]
+    assert "period_header_conflict" not in pub_diag, pub_diag
+    pdf.close()

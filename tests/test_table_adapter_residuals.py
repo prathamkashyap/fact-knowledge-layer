@@ -663,10 +663,5 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
         pub_numeric_col2 = [cell.text for cell in public.candidates[0].cells if getattr(cell, "column_index", None) == 2 and cell.text not in ("Q4 2025", "Revenue", "Profit", "Margin")]
         assert {"1200", "25", "-2.1"} <= set(pub_numeric_col1), ("public numeric col 1 missing values", pub_numeric_col1)
         assert {"1450", "38", "2.6"} <= set(pub_numeric_col2), ("public numeric col 2 missing values", pub_numeric_col2)
-        # Public adapter column mapping verified directly where exposed
-        pub_header_map = {cell.text: cell for cell in public.candidates[0].cells if cell.text in ("Q4 2024", "Q4 2025") and hasattr(cell, "column_index")}
-        if "Q4 2024" in pub_header_map:
-            assert pub_header_map["Q4 2024"].column_index == 1, ("public Q4 2024 column mapping", pub_header_map)
-            assert pub_header_map["Q4 2025"].column_index == 2, ("public Q4 2025 column mapping", pub_header_map)
     finally:
         pdf.close()

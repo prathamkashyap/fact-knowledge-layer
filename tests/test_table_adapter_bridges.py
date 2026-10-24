@@ -206,7 +206,7 @@ def test_bridge_ceiling_is_pinned_on_both_sides():
 
     # Independent fixture-geometry assertions (do not derive result from thresholds)
     for vertical_gap in (30.0, 45.0, 45.5):
-        rows, subheading_y, margin_y = build(vertical_gap)
+        rows, _, _ = build(vertical_gap)
         # Fixture exercises bridge logic: subheading is between two numeric blocks
         texts = [text for _, items in rows for _, text, _ in items]
         assert "SEGMENT BETA" in texts, (vertical_gap, texts)

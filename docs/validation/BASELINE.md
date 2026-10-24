@@ -40,6 +40,11 @@ Note: `tests/test_gate5.py` asserts the literal branding string
 `"Superjoin Fact Knowledge Layer"` (the `/health` `service` field and the UI HTML).
 Those assertions are updated in Step 1 as part of the deliberate product-identity move.
 
+> **Post-Week 5 rename note (2026-09-26):** the project identity is now **Fact Knowledge
+> Layer** and the local clone directory was renamed `superjoin` → `fact-knowledge-layer`
+> to match the GitHub repository. The string above is retained because this section
+> records the Week 1 *pre-rename* state, not the current branding.
+
 ---
 
 ## 2. Clean starter-data ingest metrics
@@ -165,6 +170,14 @@ hardcodes `provider=None` (offline/heuristic) for `/upload` and `/health` report
 are gitignored (no runtime data tracked).
 
 ### Grep audit (tracked files only, case-insensitive)
+
+> **Update after the Week 5 rename (2026-09-26):** the `superjoin` hits listed below are
+> retained as the Week 1 audit record. In today's tree the only tracked `superjoin`
+> occurrences are (a) the Week 1 branding string quoted above, (b) this audit section, and
+> (c) `.gitignore` patterns that name the assignment documents **from Superjoin the
+> company**, which are deliberately kept verbatim as provenance. The project-identity
+> references (repository name, UI/branding string, local directory) were renamed to
+> `fact-knowledge-layer`; `docs/validation/phase0-spike.py` was updated with them.
 
 **`superjoin`** hits (tracked files):
 

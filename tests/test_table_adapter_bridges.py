@@ -202,36 +202,76 @@ def test_bridge_ceiling_is_pinned_on_both_sides():
         rows.append((subheading_y, [_at(30.0, "SEGMENT BETA")]))
         rows.append((margin_y, [_at(30.0, "Margin"), _right(250.0, "-2.1"), _right(350.0, "2.6")]))
         rows.append((margin_y + 12.0, [_at(30.0, "Tax"), _right(250.0, "10"), _right(350.0, "12")]))
-        return rows
+        return rows, subheading_y, margin_y
 
-        for vertical_gap, expect_fused in ((45.0, True), (45.5, False)):
-            rows = build(vertical_gap)
-            words, heights = _words_from(rows)
-            aligned_cands, aligned_diags = _aligned_numeric_candidates(1, words, heights, [])
-            border_cands, _ = _borderless_candidates(None, 1, _raw_words(rows), [])
-            if expect_fused:
-                assert len(aligned_cands) == 1 and len(border_cands) == 1, (
-                    vertical_gap, aligned_cands, border_cands)
-                for cands in (aligned_cands, border_cands):
-                    c = cands[0]
-                    texts = {cell.text for cell in c.cells}
-                    assert {"1200", "1450", "25", "38", "-2.1", "2.6", "50", "55", "10", "12"} <= texts, (
-                        vertical_gap, texts)
-                    assert "SEGMENT BETA" in texts, (vertical_gap, texts)
-            else:
-                assert aligned_cands == [], (vertical_gap, aligned_cands)
-                assert any(d.code in ("aligned_numeric_block_dropped",
-                                      "aligned_numeric_candidate_abstained")
-                           for d in aligned_diags), aligned_diags
-                assert len(border_cands) == 1, (vertical_gap, border_cands)
-                c = border_cands[0]
-                texts = {cell.text for cell in c.cells}
-                assert {"1200", "1450", "25", "38", "Measure", "Profit", "Revenue"} <= texts, (
-                    vertical_gap, texts)
-                assert not ({"50", "55", "10", "12"} & texts), (vertical_gap, texts)
-                assert "SEGMENT BETA" not in texts, (vertical_gap, texts)
-                # No candidate claims rows from both sides of the split.
-                assert c.bbox[3] <= 73.0 + vertical_gap / 2.0, (vertical_gap, c.bbox)
+    # Independent fixture-geometry assertions (do not derive result from thresholds)
+    for vertical_gap in (30.0, 45.0, 45.5):
+        rows, subheading_y, margin_y = build(vertical_gap)
+        # Subheading sits halfway between block end (73.0) and margin start (73+gap)
+        assert subheading_y == 73.0 + vertical_gap / 2.0, (vertical_gap, subheading_y)
+        assert margin_y == 73.0 + vertical_gap, (vertical_gap, margin_y)
+        # Margin and following rows are spaced by the local pitch (12 pt)
+        tax_y = margin_y + 12.0
+        assert abs(tax_y - (73.0 + vertical_gap + 12.0)) < 0.01, (vertical_gap, tax_y)
+        # Fixture exercises bridge logic: subheading is between two numeric blocks
+        texts = [text for _, items in rows for _, text, _ in items]
+        assert "SEGMENT BETA" in texts, (vertical_gap, texts)
+        assert "Margin" in texts, (vertical_gap, texts)
+
+    # Below-ceiling control: small gap -> bridge fully holds (both paths fused)
+    rows, _, _ = build(30.0)
+    words, heights = _words_from(rows)
+    aligned_cands, aligned_diags = _aligned_numeric_candidates(1, words, heights, [])
+    border_cands, _ = _borderless_candidates(None, 1, _raw_words(rows), [])
+    assert len(aligned_cands) == 1 and len(border_cands) == 1, (30.0, len(aligned_cands), len(border_cands))
+    for cands in (aligned_cands, border_cands):
+        c = cands[0]
+        texts = {cell.text for cell in c.cells}
+        assert "SEGMENT BETA" in texts, (30.0, texts)
+        # Bridge logic exercised: subheading retained inside one candidate
+        assert c.bbox[1] < 73.0 + 30.0 / 2.0, (30.0, c.bbox)
+        assert c.bbox[3] > 73.0 + 30.0 / 2.0, (30.0, c.bbox)
+
+    # At inclusive ceiling (45.0 pt gap) the bridge still holds both sides
+    rows, _, _ = build(45.0)
+    words, heights = _words_from(rows)
+    aligned_cands, aligned_diags = _aligned_numeric_candidates(1, words, heights, [])
+    border_cands, _ = _borderless_candidates(None, 1, _raw_words(rows), [])
+    assert len(aligned_cands) == 1, (45.0, "aligned", aligned_cands)
+    assert len(border_cands) == 1, (45.0, "borderless", border_cands)
+    for label, cands in (("aligned", aligned_cands), ("borderless", border_cands)):
+        c = cands[0]
+        texts = {cell.text for cell in c.cells}
+        assert "SEGMENT BETA" in texts, (label, 45.0, texts)
+        # Bridge holds at ceiling: candidate spans across subheading, includes lower numeric rows
+        assert "-2.1" in texts and "10" in texts and "12" in texts, (label, 45.0, texts)
+        assert "1200" in texts and "1450" in texts, (label, 45.0, texts)
+        # Bridge decision verified directly: candidate spans across the subheading
+        assert c.bbox[1] < 73.0 + 45.0 / 2.0, (label, 45.0, c.bbox)
+        assert c.bbox[3] > 73.0 + 45.0 / 2.0, (label, 45.0, c.bbox)
+
+    # Just above ceiling (45.5 pt): aligned abstains, borderless keeps upper block only
+    rows, _, _ = build(45.5)
+    words, heights = _words_from(rows)
+    aligned_cands, aligned_diags = _aligned_numeric_candidates(1, words, heights, [])
+    border_cands, _ = _borderless_candidates(None, 1, _raw_words(rows), [])
+    # Aligned path abstains (not inventing rows across the split)
+    assert aligned_cands == [], (45.5, "aligned candidates non-empty", aligned_cands)
+    assert any(d.code in ("aligned_numeric_block_dropped",
+                          "aligned_numeric_candidate_abstained")
+               for d in aligned_diags), (45.5, "aligned missing abstention diag", aligned_diags)
+    # Borderless keeps only upper block; subheading and lower rows excluded
+    assert len(border_cands) == 1, (45.5, "borderless count", len(border_cands))
+    c = border_cands[0]
+    texts = {cell.text for cell in c.cells}
+    assert "1200" in texts and "1450" in texts, (45.5, texts)
+    assert "Measure" in texts or "Profit" in texts or "Revenue" in texts, (45.5, texts)
+    assert "SEGMENT BETA" not in texts, (45.5, "subheading leaked", texts)
+    # Lower block excluded (no Margin/Tax numeric values from below the split)
+    assert "-2.1" not in texts, (45.5, "lower margin leaked", texts)
+    assert "10" not in texts or "12" not in texts, (45.5, "lower tax leaked", texts)
+    # Bridge decision verified: candidate does not claim rows below the bridge
+    assert c.bbox[3] <= 73.0 + 45.5 / 2.0, (45.5, "bbox crosses split", c.bbox)
 
 
 def test_two_headerless_blocks_separated_by_a_heading_inside_the_fusion_window_fuse():

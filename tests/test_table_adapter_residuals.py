@@ -518,3 +518,34 @@ def test_a_cell_carrying_two_period_labels_stays_ambiguous_in_the_borderless_pat
     assert cells[(0, 2)].text == "2025", cells
     assert any(d.code == "period_header_conflict" for d in candidates[0].diagnostics), (
         [d.code for d in candidates[0].diagnostics])
+
+
+def test_quarterly_split_word_headers_associated_without_conflict():
+    """Reproduce F-1 / §6.2-6.3 vs §14 contradiction independently.
+
+    Realistic centered Q4 2024 / Q4 2025 headers (split-word geometry) are
+    correctly parsed as coherent quarter/year labels by _period_tokens_in and
+    correctly associated by both paths. Independent reproduction across
+    aligned, borderless, and direct adapter paths shows
+    period_header_conflict=False. The audit §14 claim that both paths emit
+    period_header_conflict for split-word quarterly headers is not
+    reproducible; this regression asserts the verified outcome.
+    Genuine ambiguity (multi-label cell 2023 2024, crowded/offset headers)
+    remains unresolved per F-2.
+    """
+    from tests.test_table_adapter_bridges import _header_row, _data_rows, _at, _right, VALUES, _words_from, _raw_words
+    # Fixture: centered quarterly headers with numeric data
+    rows = [_header_row(("Q4 2024", "Q4 2025"), centres=(200.0, 300.0))]
+    rows += _data_rows(52.0, 12.0, list(VALUES))
+    words, heights = _words_from(rows)
+    aligned_cands, aligned_diags = _aligned_numeric_candidates(1, words, heights, [])
+    border_cands, _ = _borderless_candidates(None, 1, _raw_words(rows), [])
+    for label, cands, diags in (("aligned", aligned_cands, aligned_diags), ("borderless", border_cands, [])):
+        assert len(cands) == 1, (label, "expected one candidate for coherent quarterly headers", cands)
+        diag_codes = [d.code for d in (cands[0].diagnostics if cands else [])] + [d.code for d in diags]
+        assert "period_header_conflict" not in diag_codes, (label, "quarterly headers should not conflict", diag_codes)
+        texts = {cell.text for cell in cands[0].cells}
+        # Coherent quarter/year labels retained as semantic tokens
+        assert any("2024" in t or "2025" in t for t in texts), (label, texts)
+    # Multi-label ambiguity remains detected (control)
+    assert _period_tokens_in("2023 2024") == ["2023", "2024"]

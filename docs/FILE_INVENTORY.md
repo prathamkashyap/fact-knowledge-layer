@@ -10,7 +10,7 @@ High-level inventory of tracked source, test, script, configuration, documentati
 | app/__init__.py | Package init | Current | — |
 | app/main.py | Entry / UI | Current | FastAPI / HTML explorer |
 | app/pdf_parser.py | PDF ingestion | Current | Phase 1 milestone |
-| app/extractor.py | Fact extraction | Current | Grounded evidence |
+| app/extraction.py | Fact extraction | Current | Grounded evidence |
 | app/normalizer.py | Normalization | Current | Phase 3 milestone |
 | app/matcher.py | Matching | Current | Phase 3 milestone |
 | app/reasoner.py | Epistemic reasoning | Current | Phase 4 milestone |
@@ -20,14 +20,19 @@ High-level inventory of tracked source, test, script, configuration, documentati
 | app/pipeline.py | Pipeline orchestration | Current | — |
 | app/providers.py | LLM provider abstraction | Current | — |
 
-## Tests (tests/ — 21 files; key groups)
+## Tests (tests/ — 20 `test_*.py` modules + `__init__.py`; key groups)
 
 | File / Group | Feature / Failure Class | Status | Evidence |
 | --- | --- | --- | --- |
 | test_table_adapter_bridges.py | Bridge / ceiling / F-5 | Current; repaired at 5f6d2ef | 30 passed |
-| test_table_adapter_residuals.py | Residual defects / F-1 / F-2 / F-3 | Current; quarterly PDF + column mapping at 5f6d2ef | 45 passed |
+| test_table_adapter_residuals.py | Residual defects / F-1 / F-2 / F-3 | Current; quarterly PDF + column mapping at 5f6d2ef | 46 collected (45 focused + 1 new regression) |
 | test_table_adapter_defects.py | Defects / F-4 / F-6 | Current | 68 passed with extraction |
 | test_table_extraction.py | End-to-end extraction | Current | — |
+| test_macro_indicators.py | Macro indicators | Current | — |
+| test_pipeline_integration.py | Pipeline integration | Current | — |
+| test_scope_extraction.py | Scope extraction | Current | — |
+| test_status_reasoning.py | Status reasoning | Current | — |
+| test_table_regression.py | Table regression | Current | — |
 | test_evaluate.py / test_gate*.py / test_evidence_validation.py / test_director_appointments.py / test_dedup.py | Evaluation gates / evidence / dedup / director data | Current | — |
 | test_comparative_highlights.py / test_demo_loader.py | Demo / highlights | Current | — |
 

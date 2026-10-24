@@ -628,6 +628,15 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
         # period_headers_associated_by_alignment / period_headers_associated_by_page_grid
         # diagnostics showing association is established.
         assert any("period_headers_associated" in d for d in a_diag), ("header association missing", a_diag)
+        # Explicit column mapping: Q4 2024 -> column 1 (1200, 25, -2.1);
+        # Q4 2025 -> column 2 (1450, 38, 2.6)
+        header_by_text = {cell.text: cell for cell in a.cells if cell.text in ("Q4 2024", "Q4 2025")}
+        assert "Q4 2024" in header_by_text and header_by_text["Q4 2024"].column_index == 1, ("first quarter must map to first numeric column", header_by_text)
+        assert "Q4 2025" in header_by_text and header_by_text["Q4 2025"].column_index == 2, ("second quarter must map to second numeric column", header_by_text)
+        numeric_col1 = [cell.text for cell in a.cells if cell.column_index == 1 and cell.text not in ("Q4 2024", "Revenue", "Profit", "Margin")]
+        numeric_col2 = [cell.text for cell in a.cells if cell.column_index == 2 and cell.text not in ("Q4 2025", "Revenue", "Profit", "Margin")]
+        assert {"1200", "25", "-2.1"} <= set(numeric_col1), ("first numeric column missing expected values", numeric_col1)
+        assert {"1450", "38", "2.6"} <= set(numeric_col2), ("second numeric column missing expected values", numeric_col2)
 
         # Public adapter
         public = extract_tables_from_page(page, 1)

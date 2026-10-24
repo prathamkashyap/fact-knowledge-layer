@@ -563,14 +563,23 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
     pdf_path = tmp_path / "quarterly_split.pdf"
     doc = pymupdf.open()
     page = doc.new_page(width=500, height=200)
-    # Realistic split-word phrases with normal space
-    page.insert_text((180, 40), "Q4 2024", fontsize=9)
-    page.insert_text((280, 40), "Q4 2025", fontsize=9)
-    # Numeric data under the columns (aligned to header centres ~200/300)
-    for y in (70, 82, 94):
-        page.insert_text((190, y), "Revenue" if y == 70 else ("Profit" if y == 82 else "Margin"), fontsize=9)
-        page.insert_text((290, y), "1200" if y == 70 else ("25" if y == 82 else "-2.1"), fontsize=9)
-        page.insert_text((390, y), "1450" if y == 70 else ("38" if y == 82 else "2.6"), fontsize=9)
+    # Realistic split-word phrases with normal space — positioned over verified
+    # aligned-path column centres (200/300) with numeric right edges 250/350.
+    from tests.test_table_adapter_bridges import _width
+    doc = pymupdf.open()
+    page = doc.new_page(width=500, height=200)
+    for centre, text in ((200, "Q4 2024"), (300, "Q4 2025")):
+        w = _width(text, fontsize=9)
+        page.insert_text((centre - w/2, 40), text, fontsize=9)
+    for y, label, v1, v2 in (
+        (52, "Revenue", "1200", "1450"),
+        (64, "Profit", "25", "38"),
+        (76, "Margin", "-2.1", "2.6"),
+    ):
+        page.insert_text((30, y), label, fontsize=9)
+        for val, right in ((v1, 250), (v2, 350)):
+            w = _width(val, fontsize=9)
+            page.insert_text((right - w, y), val, fontsize=9)
     doc.save(str(pdf_path))
     doc.close()
 
@@ -600,32 +609,25 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
         assert "Q4 2025" in texts, texts
         diag_codes = [d.code for d in border_cands[0].diagnostics]
         assert "period_header_conflict" not in diag_codes, diag_codes
-        # Investigate ambiguous_header_span: record whether present
-        has_span = any("ambiguous_header_span" in d for d in diag_codes)
-        # It describes structural span ambiguity unrelated to periodic assignment
-        # when geometry allows header words to sit between columns; here with clear
-        # 65.5 pt separation it should not indicate unresolved quarter assignment.
-        assert not has_span or "ambiguous_header_span" in diag_codes, diag_codes
+        # ambiguous_header_span is structural (merged-header span; source line 912);
+        # it may appear in borderless but must not indicate unresolved quarter assignment.
+        assert "period_header_conflict" not in diag_codes, diag_codes
 
-        # Aligned path: build aligned words and attempt candidate
+        # Aligned path: must produce one candidate with full quarter labels
         aligned_words = [((w[0], w[1], w[2], w[3]), w[4]) for w in words]
         aligned_cands, aligned_diags = _aligned_numeric_candidates(1, aligned_words, [9.0]*len(aligned_words), [])
-        # We do not demand a positive aligned candidate with this geometry,
-        # because aligned requires explicit numeric-column alignment that a
-        # synthetic page with header at y=40 and data at y=70 may not fully
-        # satisfy; the important evidence is token grouping and association.
-        # If a candidate exists, assert full labels; if none, document geometry.
-        if aligned_cands:
-            a_texts = {cell.text for cell in aligned_cands[0].cells}
-            assert "Q4 2024" in a_texts or any("Q4" in t for t in a_texts), a_texts
-            a_diag = [d.code for d in aligned_cands[0].diagnostics]
-            assert "period_header_conflict" not in a_diag, a_diag
-        else:
-            # Aligned path requires stricter numeric-column geometry than this
-            # synthetic split-word fixture provides; the failure mode is
-            # aligned_numeric_columns_insufficient, not misassociation.
-            aligned_diags = [d.code for d in aligned_diags]
-            assert "aligned_numeric_columns_insufficient" in aligned_diags or "aligned_numeric_block_dropped" in aligned_diags, aligned_diags
+        assert len(aligned_cands) == 1, ("aligned must find one candidate for complete quarterly header", len(aligned_cands), aligned_diags)
+        a = aligned_cands[0]
+        a_texts = {cell.text for cell in a.cells}
+        assert "Q4 2024" in a_texts, ("quarter token dropped; only year remains", a_texts)
+        assert "Q4 2025" in a_texts, ("quarter token dropped; only year remains", a_texts)
+        a_diag = [d.code for d in a.diagnostics]
+        assert "period_header_conflict" not in a_diag, ("conflict should not occur for unambiguous quarterly header", a_diag)
+        assert "period_header_incomplete" not in a_diag, ("complete header should not trigger incomplete", a_diag)
+        # Header-to-column association verified via cell presence; coupled with
+        # period_headers_associated_by_alignment / period_headers_associated_by_page_grid
+        # diagnostics showing association is established.
+        assert any("period_headers_associated" in d for d in a_diag), ("header association missing", a_diag)
 
         # Public adapter
         public = extract_tables_from_page(page, 1)

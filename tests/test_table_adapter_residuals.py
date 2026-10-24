@@ -561,8 +561,6 @@ def test_quarterly_split_word_pdf_fixture_preserved_in_public_adapter(tmp_path):
     import pymupdf
     from app.table_extraction import _borderless_candidates, extract_tables_from_page, _aligned_numeric_candidates
     pdf_path = tmp_path / "quarterly_split.pdf"
-    doc = pymupdf.open()
-    page = doc.new_page(width=500, height=200)
     # Realistic split-word phrases with normal space — positioned over verified
     # aligned-path column centres (200/300) with numeric right edges 250/350.
     from tests.test_table_adapter_bridges import _width

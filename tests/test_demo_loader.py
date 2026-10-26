@@ -42,6 +42,46 @@ def test_demo_paths_resolve():
         assert path.is_dir(), f"Dataset directory missing: {path}"
 
 
+def test_resolve_demo_db_path_precedence(monkeypatch, tmp_path):
+    """Explicit --db wins over the environment; env wins over the repo default."""
+    explicit = tmp_path / "explicit.db"
+    env_path = tmp_path / "env.db"
+
+    monkeypatch.setenv("FACT_LAYER_DB_PATH", str(env_path))
+    assert load_starter_demo.resolve_demo_db_path(str(explicit)) == explicit.resolve()
+    assert load_starter_demo.resolve_demo_db_path() == env_path.resolve()
+
+    monkeypatch.delenv("FACT_LAYER_DB_PATH")
+    assert load_starter_demo.resolve_demo_db_path() == load_starter_demo.DEMO_DB_PATH
+
+
+def test_main_db_option_targets_external_path(monkeypatch, tmp_path):
+    """`main(["--db", ...])` creates the database outside the repository.
+
+    Dataset discovery is stubbed so this stays a fast path-plumbing test; the
+    full ingest is covered by the end-to-end smoke test below.
+    """
+    monkeypatch.setattr(load_starter_demo, "discover_pdfs", lambda: [])
+    sentinel_default = tmp_path / "in_repo_default.db"
+    monkeypatch.setattr(load_starter_demo, "DEMO_DB_PATH", sentinel_default)
+
+    target = tmp_path / "external" / "demo.db"
+    assert load_starter_demo.main(["--db", str(target)]) == 0
+
+    assert target.is_file()
+    assert not sentinel_default.exists()
+
+
+def test_main_honors_fact_layer_db_path_env(monkeypatch, tmp_path):
+    """`FACT_LAYER_DB_PATH` selects the target when --db is omitted."""
+    monkeypatch.setattr(load_starter_demo, "discover_pdfs", lambda: [])
+    target = tmp_path / "env_demo.db"
+    monkeypatch.setenv("FACT_LAYER_DB_PATH", str(target))
+
+    assert load_starter_demo.main() == 0
+    assert target.is_file()
+
+
 def test_starter_datasets_discovered():
     """Verify all 6 starter PDFs across both datasets are discovered."""
     pdfs = load_starter_demo.discover_pdfs()

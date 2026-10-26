@@ -8,12 +8,17 @@ Explorer UI can immediately show real facts and relationships:
 
     python scripts/load_starter_demo.py
 
-It always resets a dedicated demo database at ``data/demo.db`` (never the
-default application DB) and runs every starter PDF through the same
-``process_document_pipeline`` function the FastAPI ``/upload`` endpoint uses,
-so the demo reflects exactly what the live pipeline produces. It prints the
-real summary counts it produced (never hardcoded) and exits non-zero on
+It resets a dedicated demo database and runs every starter PDF through the
+same ``process_document_pipeline`` function the FastAPI ``/upload`` endpoint
+uses, so the demo reflects exactly what the live pipeline produces. It prints
+the real summary counts it produced (never hardcoded) and exits non-zero on
 failure.
+
+The database path resolves in this order:
+
+1. ``--db PATH`` on the command line (useful for temporary or external paths).
+2. ``FACT_LAYER_DB_PATH`` in the environment (same variable the server uses).
+3. The default ``data/demo.db`` inside the repository.
 
 Point the server at the resulting demo database with:
 
@@ -23,6 +28,8 @@ Running the server without that variable still serves the default (empty on a
 fresh clone) knowledge base at ``data/fact_layer.db``.
 """
 
+import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -44,6 +51,22 @@ DATASET_DIRS = [
 
 # Dedicated demo DB — deliberately NOT the default application DB path.
 DEMO_DB_PATH = REPO_ROOT / "data" / "demo.db"
+
+
+def resolve_demo_db_path(explicit: str | None = None) -> Path:
+    """Resolve the demo DB path with an explicit override taking precedence.
+
+    Precedence: ``--db``/``explicit`` argument, then ``FACT_LAYER_DB_PATH``,
+    then the repository default ``data/demo.db``. Relative explicit/env paths
+    are resolved against the current working directory so a temporary path
+    outside the checkout works regardless of where the script lives.
+    """
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    env_path = os.environ.get("FACT_LAYER_DB_PATH")
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+    return DEMO_DB_PATH
 
 
 def discover_pdfs():
@@ -73,7 +96,23 @@ def reset_demo_db(db_path: Path):
             sidecar.unlink()
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Load the bundled starter datasets into a demo knowledge base."
+    )
+    parser.add_argument(
+        "--db",
+        metavar="PATH",
+        help=(
+            "Database path to create/reset. Defaults to FACT_LAYER_DB_PATH when "
+            "set, otherwise data/demo.db in the repository."
+        ),
+    )
+    # Programmatic callers (tests) pass no argv; the CLI entry point passes
+    # sys.argv[1:] explicitly so pytest's own arguments are never parsed.
+    args = parser.parse_args([] if argv is None else argv)
+    demo_db_path = resolve_demo_db_path(args.db)
+
     print("Fact Knowledge Layer - starter demo loader", flush=True)
     print("=" * 52, flush=True)
 
@@ -87,9 +126,9 @@ def main() -> int:
     for name, pdf in pdfs:
         print(f"  - [{name}] {pdf.name}")
 
-    reset_demo_db(DEMO_DB_PATH)
-    db = Database(str(DEMO_DB_PATH))
-    print(f"Reset dedicated demo DB at {DEMO_DB_PATH}", flush=True)
+    reset_demo_db(demo_db_path)
+    db = Database(str(demo_db_path))
+    print(f"Reset dedicated demo DB at {demo_db_path}", flush=True)
 
     t0 = time.time()
     try:
@@ -117,7 +156,7 @@ def main() -> int:
     total_seconds = time.time() - t0
 
     # Reopen read-only for the summary so counts come from the persisted demo DB.
-    db = Database(str(DEMO_DB_PATH))
+    db = Database(str(demo_db_path))
     try:
         stats = db.get_stats()
     finally:
@@ -138,10 +177,10 @@ def main() -> int:
     print("=" * 52)
     print(
         "Start the server against this demo DB with:\n"
-        "  FACT_LAYER_DB_PATH=data/demo.db uvicorn app.main:app --host 127.0.0.1 --port 8000"
+        f"  FACT_LAYER_DB_PATH={demo_db_path} uvicorn app.main:app --host 127.0.0.1 --port 8000"
     )
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

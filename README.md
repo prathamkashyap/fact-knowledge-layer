@@ -44,10 +44,26 @@ FACT_LAYER_DB_PATH=data/demo.db uvicorn app.main:app --host 127.0.0.1 --port 800
 
 Open **[http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)** in your browser. Real facts, cross-document comparisons, and evidence trails are visible immediately.
 
+> **Temporary or external database:** `load_starter_demo.py` accepts `--db PATH` (and otherwise honors `FACT_LAYER_DB_PATH`) so the demo can live outside the checkout:
+> ```bash
+> python scripts/load_starter_demo.py --db /tmp/fkl-demo.db
+> FACT_LAYER_DB_PATH=/tmp/fkl-demo.db uvicorn app.main:app --host 127.0.0.1 --port 8000
+> ```
+
 > **Clean Knowledge Base Mode:** Running the server without `FACT_LAYER_DB_PATH` starts a clean, empty knowledge base at `data/fact_layer.db`:
 > ```bash
 > uvicorn app.main:app --host 127.0.0.1 --port 8000
 > ```
+
+### Verify execution end to end
+
+Run the smoke check after installing dependencies to verify the documented workflow on your machine:
+
+```bash
+python scripts/smoke_check.py
+```
+
+It loads the six starter PDFs into a temporary database outside the repository, starts the real FastAPI app on a free local port, checks `/health`, `/`, `/ui`, `/documents`, `/facts`, `/facts/{id}`, `/relationships`, and `/stats`, then terminates the server and removes the temporary database. It requires no API keys, exits non-zero on any failed stage, and leaves evaluation artifacts untouched.
 
 ---
 
@@ -154,7 +170,7 @@ The repository ships with two multi-source document packages in `starter-dataset
 
 To ensure a seamless evaluation experience, `load_starter_demo.py` automates ingestion:
 - Locates both dataset directories and discovers all 6 PDFs.
-- Resets a dedicated SQLite database at `data/demo.db` (leaving the default `data/fact_layer.db` clean).
+- Resets a dedicated SQLite database at `data/demo.db` by default, or at an explicit `--db PATH` / `FACT_LAYER_DB_PATH` location (leaving the default `data/fact_layer.db` clean).
 - Calls the identical `process_document_pipeline` used by the production `/upload` endpoint (no mocked ingestion or hand-seeded facts).
 - Outputs live summary counts and exits non-zero if any error occurs.
 

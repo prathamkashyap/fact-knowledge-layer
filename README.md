@@ -32,7 +32,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Verify regression test suite (historical Week 5 baseline: 300 passing; current verified: 447 passing at e46f59d, Python 3.15.0)
+# 3. Verify regression test suite (historical Week 5 baseline: 300 passing; 447 at e46f59d; current verified: 449 passing at 892e6bc, Python 3.15.0)
 python -m pytest tests/ -q
 
 # 4. Load the bundled starter demo database
@@ -64,6 +64,30 @@ python scripts/smoke_check.py
 ```
 
 It loads the six starter PDFs into a temporary database outside the repository, starts the real FastAPI app on a free local port, checks `/health`, `/`, `/ui`, `/documents`, `/facts`, `/facts/{id}`, `/relationships`, and `/stats`, then terminates the server and removes the temporary database. It requires no API keys, exits non-zero on any failed stage, and leaves evaluation artifacts untouched.
+
+### Reasoning demonstrations (live pipeline)
+
+The starter dataset produces **RECONCILABLE** (GDP vintage / scope distinctions) and **UNCERTAIN** (ambiguous reporting period) live from real source material. The two outcomes not present in the starter run — **CORROBORATES** and **CONTRADICTS** — are demonstrated through clearly-labelled synthetic fixtures (`tests/fixture patterns`) routed through the full pipeline, not seeded.
+
+Quick verification commands (each uses temporary DB and uploads):
+
+```bash
+# All four required cases + live starter results in one suite
+python -m pytest tests/test_demo_loader.py tests/test_synthetic_reasoning_cases.py tests/test_unseen_pdf.py -q --tb=short
+
+# Repeatable standalone demonstration (synthetic correlation + contradiction)
+python scripts/validate_demonstrations.py
+```
+
+Results observed on the current branch (`449 passed, 7 warnings, Python 3.15.0`):
+
+- **CORROBORATES** — synthetic pair (2 independent sources, value 6.5 % FY2024/25, `conf=0.96`).
+- **CONTRADICTS** — synthetic pair (same metric/period, 6.5 % vs 7.2 %, `conf=0.85`).
+- **RECONCILABLE** — starter-data GDP vintage (Economic Survey 6.4 % first-advance vs RBI 6.5 % second-advance) and scope/standalone-vs-consolidated pairs.
+- **UNCERTAIN** — starter-data ambiguous headline-inflation periods.
+- **Unseen-PDF** — `tests/test_unseen_pdf.py` runs a synthetic non-starter PDF through parse → extract → normalize → match → reason → persist → `/documents`, `/facts`, `/facts/{id}`; docs and facts have full evidence.
+
+Every fixture carries `[SYNTHETIC DEMONSTRATION FIXTURE - illustrative, not real-world data]`; it is not presented as real-world financial information.
 
 ---
 

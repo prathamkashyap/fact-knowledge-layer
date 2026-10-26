@@ -8,7 +8,9 @@ Runs the documented workflow against temporary paths outside the repository:
 2. Start the real FastAPI app with ``FACT_LAYER_DB_PATH`` pointed at that DB.
 3. Exercise the live HTTP surface: ``/health``, ``/``, ``/ui``,
    ``/documents``, ``/facts``, ``/facts/{id}``, ``/relationships``, ``/stats``.
-4. Terminate the server and remove the temporary database.
+4. Upload one bundled starter PDF through ``POST /upload`` and verify that it
+   is stored in a temporary upload directory and appears in ``/documents``.
+5. Terminate the server and remove the temporary database and uploads.
 
 No external LLM credentials are required or forwarded; the default
 offline/heuristic runtime is exercised. Exits non-zero and prints diagnostics if
@@ -34,9 +36,16 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+STARTER_UPLOAD_PDF = (
+    REPO_ROOT
+    / "starter-datasets"
+    / "delhivery"
+    / "03-delhivery-q4-fy24-earnings-presentation.pdf"
+)
 
 
 def _log(stage: str, message: str) -> None:
@@ -60,6 +69,26 @@ def _clean_env() -> dict[str, str]:
 def _http_get(base: str, path: str, timeout: float = 10.0):
     with urllib.request.urlopen(base + path, timeout=timeout) as response:
         return response.status, response.headers.get("content-type", ""), response.read()
+
+
+def _http_post_pdf(base: str, path: str, pdf_path: Path, timeout: float = 120.0):
+    """POST a PDF as multipart/form-data using only the standard library."""
+    boundary = f"----fkl-smoke-{uuid.uuid4().hex}"
+    pdf_bytes = pdf_path.read_bytes()
+    head = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="files"; filename="{pdf_path.name}"\r\n'
+        "Content-Type: application/pdf\r\n\r\n"
+    ).encode("utf-8")
+    tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    request = urllib.request.Request(
+        base + path,
+        data=head + pdf_bytes + tail,
+        method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.status, response.read()
 
 
 def _wait_for_health(base: str, process: subprocess.Popen, timeout: float) -> dict:
@@ -89,9 +118,8 @@ def _tail(path: Path, lines: int = 30) -> str:
 def run_smoke(timeout: float, keep: bool) -> int:
     temp_root = Path(tempfile.mkdtemp(prefix="fkl-smoke-"))
     db_path = temp_root / "demo.db"
+    upload_dir = temp_root / "uploads"
     server_log = temp_root / "server.log"
-    uploads_dir = REPO_ROOT / "data" / "uploads"
-    uploads_preexisted = uploads_dir.exists()
     server: subprocess.Popen | None = None
     failures: list[str] = []
 
@@ -128,6 +156,7 @@ def run_smoke(timeout: float, keep: bool) -> int:
         base = f"http://127.0.0.1:{port}"
         env = _clean_env()
         env["FACT_LAYER_DB_PATH"] = str(db_path)
+        env["FACT_LAYER_UPLOAD_DIR"] = str(upload_dir)
         with server_log.open("w") as log_handle:
             server = subprocess.Popen(
                 [
@@ -212,6 +241,33 @@ def run_smoke(timeout: float, keep: bool) -> int:
         require(status == 200 and json.loads(body).get("total_documents", 0) >= 1,
                 "GET /stats returns aggregate counts")
 
+        # 5. Real upload through the documented endpoint, into temp storage.
+        status, body = _http_post_pdf(base, "/upload", STARTER_UPLOAD_PDF)
+        payload = json.loads(body)
+        require(status == 200, "POST /upload returns 200")
+        require(
+            payload.get("status") == "success" and payload.get("processed_count") == 1,
+            "POST /upload processes one bundled starter PDF",
+        )
+        require(
+            (upload_dir / STARTER_UPLOAD_PDF.name).is_file(),
+            "upload is stored in the temporary upload directory",
+        )
+
+        status, _, body = _http_get(base, "/documents")
+        documents_after = json.loads(body)
+        require(
+            len(documents_after) == len(documents) + 1,
+            "uploaded document appears in /documents",
+        )
+        require(
+            any(
+                doc.get("filename") == STARTER_UPLOAD_PDF.name
+                for doc in documents_after
+            ),
+            "uploaded document filename is recorded",
+        )
+
     except Exception as exc:  # noqa: BLE001 - report every stage failure
         failures.append(str(exc))
         _log("FAIL", str(exc))
@@ -233,15 +289,7 @@ def run_smoke(timeout: float, keep: bool) -> int:
             _log("stage", f"--keep set; temporary files retained at {temp_root}")
         else:
             shutil.rmtree(temp_root, ignore_errors=True)
-            _log("stage", "temporary database removed")
-
-        # The app creates data/uploads on import; remove it only if this run
-        # created an empty one and it did not exist beforehand.
-        if not uploads_preexisted and uploads_dir.is_dir() and not any(uploads_dir.iterdir()):
-            uploads_dir.rmdir()
-            data_dir = uploads_dir.parent
-            if data_dir.is_dir() and not any(data_dir.iterdir()):
-                data_dir.rmdir()
+            _log("stage", "temporary database and uploads removed")
 
     if failures:
         print(f"\nSMOKE CHECK FAILED ({len(failures)} failure(s)):", file=sys.stderr)
@@ -249,7 +297,7 @@ def run_smoke(timeout: float, keep: bool) -> int:
             print(f"  - {item}", file=sys.stderr)
         return 1
 
-    print("\nSMOKE CHECK PASSED: load, startup, UI, and read-only API all work.")
+    print("\nSMOKE CHECK PASSED: load, startup, UI, read-only API, and upload all work.")
     return 0
 
 

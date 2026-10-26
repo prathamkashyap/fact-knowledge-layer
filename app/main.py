@@ -31,8 +31,28 @@ app = FastAPI(
 
 # Global database instance
 db_instance: Optional[Database] = None
+
+# Default upload location. ``FACT_LAYER_UPLOAD_DIR`` overrides it so deployments
+# and smoke checks can keep uploads outside the checkout. The directory is
+# created lazily on the first upload instead of at import time.
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def resolve_upload_dir() -> str:
+    """Return the upload directory, honoring ``FACT_LAYER_UPLOAD_DIR``."""
+    return os.environ.get("FACT_LAYER_UPLOAD_DIR") or UPLOAD_DIR
+
+
+def safe_upload_filename(filename: Optional[str]) -> str:
+    """Reduce a client-supplied filename to a safe basename.
+
+    Strips directory components from POSIX and Windows-style paths so an
+    upload cannot write outside the configured upload directory.
+    """
+    name = os.path.basename((filename or "").replace("\\", "/")).strip()
+    if name in ("", ".", ".."):
+        return "upload.pdf"
+    return name
 
 
 def get_db() -> Database:
@@ -76,14 +96,18 @@ async def upload_documents(files: List[UploadFile] = File(...)):
     results = []
 
     for file in files:
-        if not file.filename.lower().endswith(".pdf"):
+        original_name = file.filename or ""
+        if not original_name.lower().endswith(".pdf"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid file '{file.filename}'. Only PDF documents are accepted."
+                detail=f"Invalid file '{original_name}'. Only PDF documents are accepted."
             )
 
-        # Save to uploads directory
-        save_path = os.path.join(UPLOAD_DIR, file.filename)
+        # Save to the uploads directory (created lazily; env-overridable) using
+        # a sanitized basename so a crafted filename cannot escape it.
+        upload_dir = resolve_upload_dir()
+        os.makedirs(upload_dir, exist_ok=True)
+        save_path = os.path.join(upload_dir, safe_upload_filename(original_name))
         with open(save_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
@@ -98,7 +122,7 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         except Exception as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"Error processing PDF '{file.filename}': {str(e)}"
+                detail=f"Error processing PDF '{original_name}': {str(e)}"
             )
 
     return {

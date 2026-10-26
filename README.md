@@ -49,6 +49,7 @@ Open **[http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)** in your browser. R
 > python scripts/load_starter_demo.py --db /tmp/fkl-demo.db
 > FACT_LAYER_DB_PATH=/tmp/fkl-demo.db uvicorn app.main:app --host 127.0.0.1 --port 8000
 > ```
+> Set `FACT_LAYER_UPLOAD_DIR` to keep files from `POST /upload` outside the checkout as well. The upload directory is created only when the first upload arrives.
 
 > **Clean Knowledge Base Mode:** Running the server without `FACT_LAYER_DB_PATH` starts a clean, empty knowledge base at `data/fact_layer.db`:
 > ```bash
@@ -63,7 +64,7 @@ Run the smoke check after installing dependencies to verify the documented workf
 python scripts/smoke_check.py
 ```
 
-It loads the six starter PDFs into a temporary database outside the repository, starts the real FastAPI app on a free local port, checks `/health`, `/`, `/ui`, `/documents`, `/facts`, `/facts/{id}`, `/relationships`, and `/stats`, then terminates the server and removes the temporary database. It requires no API keys, exits non-zero on any failed stage, and leaves evaluation artifacts untouched.
+It loads the six starter PDFs into a temporary database outside the repository, starts the real FastAPI app on a free local port, checks `/health`, `/`, `/ui`, `/documents`, `/facts`, `/facts/{id}`, `/relationships`, and `/stats`, then uploads one bundled starter PDF through `POST /upload` into a temporary upload directory and confirms it appears in `/documents`. It terminates the server and removes the temporary database and uploads. It requires no API keys, exits non-zero on any failed stage, and leaves evaluation artifacts untouched.
 
 ---
 

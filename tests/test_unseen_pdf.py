@@ -111,3 +111,13 @@ def test_unseen_pdf_pipeline_and_api(unseen_client_and_db):
         f.get("evidence", {}).get("document_name") == UNSEEN_FIXTURE_NAME
         for f in facts_resp
     )
+
+    # API retrieval of a single fact by its returned ID (individual-fact endpoint)
+    first_fact_id = facts_resp[0]["id"]
+    res_fact = client.get(f"/facts/{first_fact_id}")
+    assert res_fact.status_code == 200, f"GET /facts/{{id}} failed: {res_fact.status_code}"
+    detail = res_fact.json()
+    assert detail.get("id") == first_fact_id
+    assert "evidence" in detail
+    assert detail["evidence"]["document_name"] == UNSEEN_FIXTURE_NAME
+    assert detail["evidence"]["page_number"] == 1

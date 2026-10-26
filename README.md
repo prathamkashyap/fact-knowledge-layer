@@ -73,7 +73,7 @@ Quick verification commands (each uses temporary DB and uploads):
 
 ```bash
 # All four required cases + live starter results in one suite
-python -m pytest tests/test_synthetic_reasoning_cases.py tests/test_unseen_pdf.py -q
+python -m pytest tests/test_demo_loader.py tests/test_synthetic_reasoning_cases.py tests/test_unseen_pdf.py -q --tb=short
 
 # Repeatable standalone demonstration (synthetic correlation + contradiction)
 python scripts/validate_demonstrations.py

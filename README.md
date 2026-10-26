@@ -32,7 +32,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Verify regression test suite (historical Week 5 baseline: 300 passing; current verified: 447 passing at e46f59d, Python 3.15.0)
+# 3. Verify regression test suite (historical Week 5 baseline: 300 passing; 447 at e46f59d; current verified: 452 passing at da46edb, Python 3.15.0)
 python -m pytest tests/ -q
 
 # 4. Load the bundled starter demo database
@@ -262,6 +262,7 @@ python -m pytest tests/ -q
 ===================== 300 passed, 7 warnings in ~130s (historical Week 5 baseline at d9c68bd) =====================
 ===================== 444 passed, 7 warnings (earlier audit at 5f6d2ef) =====================
 ===================== 447 passed, 7 warnings in 147.90s (execution-readiness at e46f59d, Python 3.15.0) =====================
+===================== 452 passed, 7 warnings in 152.19s (upload-hardening at da46edb, Python 3.15.0) =====================
 ```
 
 | Test File | Count | Coverage Focus |
@@ -382,7 +383,7 @@ An audit of the **6 remaining `recall_miss` claims** (ex-012/013/014/015/016/021
 | Relationship gold | 30 (24 label + 6 absent) | **30** (unchanged) |
 | Facts (clean run) | 21 | **23** |
 | Relationships (clean run) | 24 (20 RECONCILABLE + 4 UNCERTAIN, 0 CONTRADICTS, 0 CORROBORATES) | **24** (unchanged) |
-| Tests | 282 | **300** (historical Week 5 baseline); 444 (audit at 5f6d2ef); **447 current** (execution-readiness at e46f59d, Python 3.15.0)
+| Tests | 282 | **300** (historical Week 5 baseline); 444 (audit at 5f6d2ef); 447 (execution-readiness at e46f59d); **452 current** (upload-hardening at da46edb, Python 3.15.0)
 | Remaining recall misses | 6 | **4** (ex-012, ex-013, ex-016, ex-021) |
 
 ### Before / After (Week 2)
